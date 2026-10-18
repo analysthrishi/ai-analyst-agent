@@ -1,0 +1,2 @@
+| q04 | highest revenue by month| Both answers got same answer but agent couldnt format in proper month and year formats
+| q-8 |share of revenue comes from the top 10% of customers? |  - Same number of rows but different values. Compare filters, definitions and how percentages are calculated.
