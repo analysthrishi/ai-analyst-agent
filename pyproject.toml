@@ -1,0 +1,12 @@
+[project]
+name = "ai-analyst-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb>=1.5.6",
+    "openpyxl>=3.1.5",
+    "pandas>=3.0.6",
+    "pyarrow>=26.0.0",
+]
