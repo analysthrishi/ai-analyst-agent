@@ -55,7 +55,7 @@ QUESTIONS = [
     },
     {
         "id": "q08", "category": "customer",
-        "question": "What share of revenue comes from the top 10% of customers?",
+        "question": "What percentage of revenue comes from the top 10% of customers?",
         "gold_sql": """
             WITH cust AS (
                 SELECT customer_id, SUM(revenue) AS rev
