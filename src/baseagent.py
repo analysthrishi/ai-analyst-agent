@@ -6,6 +6,7 @@ import hashlib
 import json
 
 import duckdb
+from guardrails import validate_sql
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -128,37 +129,68 @@ def detect_decline(text: str) -> str | None:
         return "cannot_answer"
     return None
 
+MAX_RETRIES = 2
+
 def answer_question(question: str, summarize_answer: bool = True) -> dict:
-    result = {"question": question, "status": None, "sql": None,
-              "columns": None, "rows": None, "answer": None, "error": None}
+    result = {
+        "question": question, "status": None, "sql": None,
+        "columns": None, "rows": None, "answer": None, "error": None,
+        "attempts": 0, "cached": True,
+        "latency_s": 0.0, "prompt_tokens": 0, "output_tokens": 0,
+    }
 
-    try:
-        text, meta = generate_sql(question)
-    except Exception as e:
-        result.update(status="api_error", error=str(e))
-        return result
-    result.update(meta)
+    contents = question
+    last_sql, last_error = None, None
 
-    decline = detect_decline(text)
-    if decline:
-        result.update(status=decline, answer=text)
-        return result
+    for attempt in range(MAX_RETRIES + 1):
+        result["attempts"] = attempt + 1
 
-    sql = extract_sql(text)
-    if not sql:
-        result.update(status="no_sql", error="No SQL block in model reply", answer=text)
-        return result
-    result["sql"] = sql
+        try:
+            text, meta = generate_sql(contents)
+        except Exception as e:
+            result.update(status="api_error", error=str(e))
+            return result
 
-    try:
-        columns, rows = run_sql(sql)
-    except Exception as e:
-        result.update(status="sql_error", error=str(e))
-        return result
+        result["latency_s"] += meta.get("latency_s") or 0
+        result["prompt_tokens"] += meta.get("prompt_tokens") or 0
+        result["output_tokens"] += meta.get("output_tokens") or 0
+        result["cached"] = result["cached"] and meta.get("cached", False)
 
-    result.update(status="ok", columns=columns, rows=rows)
-    if summarize_answer:
-        result["answer"] = summarize(question, sql, columns, rows)
+        decline = detect_decline(text)
+        if decline:
+            result.update(status=decline, answer=text)
+            return result
+
+        sql = extract_sql(text)
+        if not sql:
+            last_sql, last_error = None, "Reply contained no ```sql block."
+            result.update(status="no_sql", error=last_error, answer=text)
+        else:
+            ok, reason, safe_sql = validate_sql(sql)
+            if not ok:
+                # A blocked query is never retried: it is a safety decision.
+                result.update(status="blocked", sql=sql, error=reason)
+                return result
+
+            result["sql"] = safe_sql
+            try:
+                columns, rows = run_sql(safe_sql)
+            except Exception as e:
+                last_sql, last_error = safe_sql, str(e)
+                result.update(status="sql_error", error=last_error)
+            else:
+                result.update(status="ok", columns=columns, rows=rows, error=None)
+                if summarize_answer:
+                    result["answer"] = summarize(question, safe_sql, columns, rows)
+                return result
+
+        # Only SQL errors and missing SQL are retried
+        contents = (
+            f"{question}\n\nYour previous attempt failed.\n"
+            f"Previous SQL:\n{last_sql}\nError:\n{last_error}\n"
+            "Return one corrected query in a ```sql block."
+        )
+
     return result
 
 

@@ -70,7 +70,10 @@ def main():
             time.sleep(PAUSE_SECONDS)
 
         if q["gold_sql"] is None:
-            passed = out["status"] in ("refuse", "cannot_answer")
+            expected = q.get("expected_behavior")
+            passed = out["status"] in ("refuse", "cannot_answer") or (
+                expected == "refuse" and out["status"] == "blocked"
+            )
         else:
             gold_rows = con.execute(q["gold_sql"]).fetchall()
             ordered = "ORDER BY" in q["gold_sql"].upper()
@@ -82,6 +85,7 @@ def main():
             "error": out["error"], "latency_s": out.get("latency_s"),
             "prompt_tokens": out.get("prompt_tokens"),
             "output_tokens": out.get("output_tokens"),
+            "attempts": out.get("attempts"),
         })
         print("   ->", "PASS" if passed else "FAIL", f"({out['status']})")
 
