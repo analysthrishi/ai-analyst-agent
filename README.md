@@ -27,3 +27,23 @@ See `docs/glossary.md` for business definitions and known limitations.
 - [ ] Tools (charts, RFM)
 - [ ] API and UI
 - [ ] Docker, CI and deployment
+
+
+## Evaluation results
+
+| Version | Score | What changed |
+|---|---|---|
+| baseline_v1 | 11/13 | First run (includes percent-formatting rule) |
+| v2_parse_fix | 13/13 | Decline detection tolerates code fences |
+| v3_guardrails | 13/13 | Added SQL validator, tests, retry loop |
+
+Note: 13 questions is a small set. Day 5 expands it to find real weaknesses.
+
+## Safety layers
+1. Prompt tells the model to refuse destructive requests.
+2. SQL validator (sqlglot) allows only a single SELECT on approved tables.
+3. Read-only database connection.
+
+| v4_batch1 | 9/13 | New questions q15-q27. 2 failures were gold-SQL issues, 2 were agent errors |
+| v5_rules | 2/2 on previously failed | Rules: default to `sales`; count entities via a CTE |
+| v5_regress (a+b) | 26/26 | Full regression under the new prompt, no regressions |

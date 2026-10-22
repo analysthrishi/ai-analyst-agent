@@ -1,0 +1,34 @@
+{
+  "version": "v5_rules",
+  "run_at": "2026-10-22T17:14:08.745680",
+  "score": 2,
+  "total": 2,
+  "records": [
+    {
+      "id": "q15",
+      "category": "aggregation",
+      "question": "How many invoices were placed in 2011?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "SELECT COUNT(DISTINCT invoice) AS invoice_count FROM sales WHERE EXTRACT(YEAR FROM invoice_date) = 2011 LIMIT 1000",
+      "error": null,
+      "latency_s": 23.57,
+      "prompt_tokens": 786,
+      "output_tokens": 37,
+      "attempts": 1
+    },
+    {
+      "id": "q24",
+      "category": "customer",
+      "question": "How many customers made purchases in both 2010 and 2011?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_years AS (SELECT customer_id, EXTRACT(YEAR FROM invoice_date) AS yr FROM sales WHERE NOT customer_id IS NULL AND EXTRACT(YEAR FROM invoice_date) IN (2010, 2011) GROUP BY customer_id, EXTRACT(YEAR FROM invoice_date)), both_years AS (SELECT customer_id FROM customer_years GROUP BY customer_id HAVING COUNT(DISTINCT yr) = 2) SELECT COUNT(*) AS customers FROM both_years LIMIT 1000",
+      "error": null,
+      "latency_s": 25.89,
+      "prompt_tokens": 793,
+      "output_tokens": 138,
+      "attempts": 1
+    }
+  ]
+}

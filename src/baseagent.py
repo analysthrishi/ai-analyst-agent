@@ -48,6 +48,15 @@ Rules:
 - If the data cannot answer the question (for example profit, costs, emails), reply exactly: CANNOT_ANSWER: <reason>
 - When a question asks for a percentage, return a number from 0 to 100 (for example 63.89), not a fraction (0.6389). Round to 2 decimal places.
 - Round money to 2 decimal places.
+- Use the 'sales' view for any question about orders, invoices, customers, products or revenue. Use 'transactions' or 'cancellations' only when the question explicitly mentions cancellations, returns or all raw rows.
+- To count entities (customers, products) that meet a condition spanning several groups, first build one row per entity in a CTE using GROUP BY and HAVING, then COUNT the rows in an outer query. Never put COUNT(DISTINCT x) in the same query that already groups by x.
+Example (a different case from any test question): products sold in both the United Kingdom and France:
+WITH per_product AS (
+    SELECT stock_code FROM sales
+    WHERE country IN ('United Kingdom', 'France')
+    GROUP BY stock_code HAVING COUNT(DISTINCT country) = 2
+)
+SELECT COUNT(*) AS products FROM per_product
 """
 
 CACHE_PATH = Path("data/llm_cache.json")  # data/ is gitignored
