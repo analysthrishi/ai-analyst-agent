@@ -49,3 +49,9 @@ Note: 13 questions is a small set. Day 5 expands it to find real weaknesses.
 | v5_regress (a+b) | 26/26 | Full regression under the new prompt, no regressions |
 
 - Prompt rules were written after seeing failures on batch 1. Batch 2 (held-out) tests whether they generalise.
+
+| v5_regress (a+b) | 26/26 | Full regression under the new prompt |
+| v6_batch2 | 15/15 | Held-out questions written before the run; prompt frozen |
+
+- Held-out batch is small (15 questions); a perfect score does not rule out failures on other question types.
+- Result comparison accepts a match when all gold values appear in the agent's row.
