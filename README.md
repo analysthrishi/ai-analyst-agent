@@ -47,3 +47,5 @@ Note: 13 questions is a small set. Day 5 expands it to find real weaknesses.
 | v4_batch1 | 9/13 | New questions q15-q27. 2 failures were gold-SQL issues, 2 were agent errors |
 | v5_rules | 2/2 on previously failed | Rules: default to `sales`; count entities via a CTE |
 | v5_regress (a+b) | 26/26 | Full regression under the new prompt, no regressions |
+
+- Prompt rules were written after seeing failures on batch 1. Batch 2 (held-out) tests whether they generalise.
