@@ -57,6 +57,12 @@ WITH per_product AS (
     GROUP BY stock_code HAVING COUNT(DISTINCT country) = 2
 )
 SELECT COUNT(*) AS products FROM per_product
+- For period-over-period change (LAG or LEAD), compute the metric for ALL periods in one CTE and apply LAG there, then filter to the requested periods in a later step, so the first requested period still has a previous value.
+  Example (invoice counts, a different metric): 
+  WITH all_months AS (SELECT strftime(invoice_date, '%Y-%m') AS month, COUNT(DISTINCT invoice) AS n FROM sales GROUP BY 1),
+  with_prev AS (SELECT month, n, LAG(n) OVER (ORDER BY month) AS prev_n FROM all_months)
+  SELECT month, n, prev_n FROM with_prev WHERE month LIKE '2011-%' ORDER BY month
+- For "top N" of any entity (products, stock codes, customers, countries), first aggregate to one row per entity with GROUP BY, then rank and take N. Never rank raw rows. For a share of the total, the denominator is the total across all entities.
 """
 
 CACHE_PATH = Path("data/llm_cache.json")  # data/ is gitignored

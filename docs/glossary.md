@@ -13,4 +13,4 @@
   line items, though most come from the overlap between the two yearly sheets.
 - About 23% of rows have no customer ID (likely guest checkouts), so
   customer-level metrics cover only the identified customers.
-  
+  - Order = one distinct invoice number. "First order" and "second order" mean the earliest and second-earliest invoices by invoice date. Two invoices on the same day are two separate orders.

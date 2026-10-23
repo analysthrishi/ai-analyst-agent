@@ -55,3 +55,4 @@ Note: 13 questions is a small set. Day 5 expands it to find real weaknesses.
 
 - Held-out batch is small (15 questions); a perfect score does not rule out failures on other question types.
 - Result comparison accepts a match when all gold values appear in the agent's row.
+| v8_fixes | to fill | Window rule, top-N rule, glossary definition of "order" |

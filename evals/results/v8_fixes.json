@@ -1,0 +1,47 @@
+{
+  "version": "v8_fixes",
+  "run_at": "2026-10-23T16:47:32.951621",
+  "score": 3,
+  "total": 3,
+  "records": [
+    {
+      "id": "q43",
+      "category": "hard_window",
+      "question": "For each month of 2011, what was the month-over-month revenue growth percentage?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH monthly_revenue AS (SELECT STRFTIME(invoice_date, '%Y-%m') AS month, SUM(revenue) AS rev FROM sales WHERE invoice_date >= '2011-01-01' AND invoice_date < '2012-01-01' GROUP BY 1), with_lag AS (SELECT month, rev, LAG(rev) OVER (ORDER BY month) AS prev_rev FROM (/* Need to include December 2010 to calculate growth for January 2011 */ SELECT STRFTIME(invoice_date, '%Y-%m') AS month, SUM(revenue) AS rev FROM sales WHERE invoice_date >= '2010-12-01' AND invoice_date < '2012-01-01' GROUP BY 1)) SELECT month, ROUND(rev, 2) AS revenue, ROUND(((rev - prev_rev) / prev_rev) * 100.0, 2) AS mom_growth_percentage FROM with_lag WHERE month LIKE '2011-%' ORDER BY month LIMIT 1000",
+      "error": null,
+      "latency_s": 5.32,
+      "prompt_tokens": 1054,
+      "output_tokens": 298,
+      "attempts": 1
+    },
+    {
+      "id": "q48",
+      "category": "hard_ratio",
+      "question": "What percentage of total revenue comes from the 5 stock codes with the highest revenue?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH stock_revenue AS (SELECT stock_code, SUM(revenue) AS total_revenue FROM sales GROUP BY stock_code), ranked_stock AS (SELECT total_revenue, ROW_NUMBER() OVER (ORDER BY total_revenue DESC) AS rk FROM stock_revenue), totals AS (SELECT SUM(total_revenue) AS overall_revenue, SUM(CASE WHEN rk <= 5 THEN total_revenue ELSE 0 END) AS top5_revenue FROM ranked_stock) SELECT ROUND((top5_revenue * 100.0) / overall_revenue, 2) AS percentage_revenue FROM totals LIMIT 1000",
+      "error": null,
+      "latency_s": 11.43,
+      "prompt_tokens": 1049,
+      "output_tokens": 176,
+      "attempts": 1
+    },
+    {
+      "id": "q50",
+      "category": "hard_window",
+      "question": "On average, how many days pass between a customer's first and second order? Ignore time of day and only include customers with at least two orders.",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_invoices AS (SELECT DISTINCT customer_id, invoice, CAST(invoice_date AS DATE) AS order_date FROM sales WHERE customer_id IS NULL = FALSE), ranked_orders AS (SELECT customer_id, order_date, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date, invoice) AS rn FROM customer_invoices), first_two AS (SELECT customer_id, MAX(CASE WHEN rn = 1 THEN order_date END) AS first_order_date, MAX(CASE WHEN rn = 2 THEN order_date END) AS second_order_date FROM ranked_orders WHERE rn <= 2 GROUP BY customer_id HAVING COUNT(DISTINCT rn) = 2), order_diffs AS (SELECT customer_id, CAST(second_order_date - first_order_date AS DOUBLE) AS days_between FROM first_two) SELECT ROUND(AVG(days_between), 2) AS avg_days_between FROM order_diffs LIMIT 1000",
+      "error": null,
+      "latency_s": 14.64,
+      "prompt_tokens": 2467,
+      "output_tokens": 549,
+      "attempts": 2
+    }
+  ]
+}

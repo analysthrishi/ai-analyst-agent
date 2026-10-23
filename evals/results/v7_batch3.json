@@ -1,0 +1,112 @@
+{
+  "version": "v7_batch3",
+  "run_at": "2026-10-23T16:19:08.911686",
+  "score": 5,
+  "total": 8,
+  "records": [
+    {
+      "id": "q43",
+      "category": "hard_window",
+      "question": "For each month of 2011, what was the month-over-month revenue growth percentage?",
+      "status": "ok",
+      "passed": false,
+      "agent_sql": "WITH monthly_revenue AS (SELECT DATE_TRUNC('MONTH', invoice_date) AS month, SUM(revenue) AS revenue FROM sales WHERE EXTRACT(YEAR FROM invoice_date) = 2011 GROUP BY DATE_TRUNC('MONTH', invoice_date)), lagged_revenue AS (SELECT month, revenue, LAG(revenue) OVER (ORDER BY month) AS prev_revenue FROM monthly_revenue) SELECT STRFTIME(month, '%Y-%m') AS month, ROUND(revenue, 2) AS revenue, ROUND(((revenue - prev_revenue) / prev_revenue) * 100.0, 2) AS mom_growth_percentage FROM lagged_revenue ORDER BY month LIMIT 1000",
+      "error": null,
+      "latency_s": 4.78,
+      "prompt_tokens": 796,
+      "output_tokens": 192,
+      "attempts": 1
+    },
+    {
+      "id": "q44",
+      "category": "hard_cohort",
+      "question": "Among customers whose first-ever order was in 2010, how many also placed an order in 2011?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_first_order AS (SELECT customer_id, MIN(invoice_date) AS first_order_date FROM sales WHERE NOT customer_id IS NULL GROUP BY customer_id), cohort_2010 AS (SELECT customer_id FROM customer_first_order WHERE EXTRACT(YEAR FROM first_order_date) = 2010), ordered_in_2011 AS (SELECT DISTINCT s.customer_id FROM sales AS s JOIN cohort_2010 AS c ON s.customer_id = c.customer_id WHERE EXTRACT(YEAR FROM s.invoice_date) = 2011) SELECT COUNT(*) AS customers_count FROM ordered_in_2011 LIMIT 1000",
+      "error": null,
+      "latency_s": 20.04,
+      "prompt_tokens": 802,
+      "output_tokens": 193,
+      "attempts": 1
+    },
+    {
+      "id": "q45",
+      "category": "hard_cohort",
+      "question": "What percentage of customers who ordered in 2010 also ordered in 2011?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customers_2010 AS (SELECT DISTINCT customer_id FROM sales WHERE NOT customer_id IS NULL AND EXTRACT(YEAR FROM invoice_date) = 2010), customers_2011 AS (SELECT DISTINCT customer_id FROM sales WHERE NOT customer_id IS NULL AND EXTRACT(YEAR FROM invoice_date) = 2011), stats AS (SELECT COUNT(c2010.customer_id) AS total_2010, COUNT(c2011.customer_id) AS both_years FROM customers_2010 AS c2010 LEFT JOIN customers_2011 AS c2011 ON c2010.customer_id = c2011.customer_id) SELECT ROUND(CAST(both_years AS DOUBLE) * 100.0 / NULLIF(total_2010, 0), 2) AS percentage FROM stats LIMIT 1000",
+      "error": null,
+      "latency_s": 23.57,
+      "prompt_tokens": 795,
+      "output_tokens": 249,
+      "attempts": 1
+    },
+    {
+      "id": "q46",
+      "category": "hard_ratio",
+      "question": "Among countries with at least 50 invoices, which has the highest average order value?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH invoice_totals AS (SELECT country, invoice, SUM(revenue) AS invoice_revenue FROM sales GROUP BY country, invoice), country_stats AS (SELECT country, COUNT(DISTINCT invoice) AS invoice_count, AVG(invoice_revenue) AS avg_order_value FROM invoice_totals GROUP BY country HAVING COUNT(DISTINCT invoice) >= 50) SELECT country, ROUND(avg_order_value, 2) AS average_order_value FROM country_stats ORDER BY avg_order_value DESC LIMIT 1",
+      "error": null,
+      "latency_s": 1.21,
+      "prompt_tokens": 792,
+      "output_tokens": 159,
+      "attempts": 1
+    },
+    {
+      "id": "q47",
+      "category": "hard_dates",
+      "question": "How much revenue did we make in the fourth quarter of 2010?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "SELECT ROUND(SUM(revenue), 2) AS revenue FROM sales WHERE invoice_date >= CAST('2010-10-01 00:00:00' AS TIMESTAMP) AND invoice_date < CAST('2011-01-01 00:00:00' AS TIMESTAMP) LIMIT 1000",
+      "error": null,
+      "latency_s": 3.64,
+      "prompt_tokens": 791,
+      "output_tokens": 77,
+      "attempts": 1
+    },
+    {
+      "id": "q48",
+      "category": "hard_ratio",
+      "question": "What percentage of total revenue comes from the 5 stock codes with the highest revenue?",
+      "status": "ok",
+      "passed": false,
+      "agent_sql": "WITH total AS (SELECT SUM(revenue) AS total_revenue FROM sales), top_5 AS (SELECT SUM(revenue) AS top_5_revenue FROM (SELECT revenue FROM sales ORDER BY revenue DESC LIMIT 5)) SELECT ROUND((top_5.top_5_revenue * 100.0) / total.total_revenue, 2) AS percentage FROM total, top_5 LIMIT 1000",
+      "error": null,
+      "latency_s": 6.64,
+      "prompt_tokens": 791,
+      "output_tokens": 116,
+      "attempts": 1
+    },
+    {
+      "id": "q49",
+      "category": "hard_definition",
+      "question": "Among customers with at least 20 invoices (counting cancelled invoices too), which customer has the highest cancellation rate, defined as cancelled invoices divided by all invoices?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_invoices AS (SELECT customer_id, COUNT(DISTINCT invoice) AS total_invoices, COUNT(DISTINCT CASE WHEN is_cancelled THEN invoice END) AS cancelled_invoices FROM transactions WHERE NOT customer_id IS NULL GROUP BY customer_id HAVING COUNT(DISTINCT invoice) >= 20) SELECT customer_id, ROUND((CAST(cancelled_invoices AS DOUBLE) / total_invoices) * 100, 2) AS cancellation_rate FROM customer_invoices ORDER BY cancellation_rate DESC, customer_id ASC LIMIT 1",
+      "error": null,
+      "latency_s": 14.52,
+      "prompt_tokens": 806,
+      "output_tokens": 153,
+      "attempts": 1
+    },
+    {
+      "id": "q50",
+      "category": "hard_window",
+      "question": "On average, how many days pass between a customer's first and second order? Ignore time of day and only include customers with at least two orders.",
+      "status": "ok",
+      "passed": false,
+      "agent_sql": "WITH customer_orders AS (/* Get unique invoice dates for each customer, avoiding multiple orders on the same day if necessary, */ /* or just ranking the distinct invoice dates. Standard practice for \"days between orders\" */ /* is usually based on distinct invoice dates. */ SELECT customer_id, CAST(invoice_date AS DATE) AS order_date FROM sales WHERE NOT customer_id IS NULL GROUP BY customer_id, CAST(invoice_date AS DATE)), ranked_orders AS (SELECT customer_id, order_date, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date ASC) AS order_rank FROM customer_orders), first_two_orders AS (SELECT customer_id, MAX(CASE WHEN order_rank = 1 THEN order_date END) AS first_order_date, MAX(CASE WHEN order_rank = 2 THEN order_date END) AS second_order_date FROM ranked_orders WHERE order_rank <= 2 GROUP BY customer_id HAVING COUNT(*) >= 2) SELECT ROUND(AVG(CAST(second_order_date - first_order_date AS DOUBLE)), 2) AS avg_days_between FROM first_two_orders LIMIT 1000",
+      "error": null,
+      "latency_s": 1.36,
+      "prompt_tokens": 805,
+      "output_tokens": 316,
+      "attempts": 1
+    }
+  ]
+}
