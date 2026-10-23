@@ -244,3 +244,73 @@ BATCH_2 = [
 ]
 
 QUESTIONS.extend(BATCH_2)
+
+BATCH_3 = [
+    {"id": "q43", "category": "hard_window",
+     "question": "For each month of 2011, what was the month-over-month revenue growth percentage?",
+     "gold_sql": """WITH m AS (
+                        SELECT strftime(invoice_date, '%Y-%m') AS month, SUM(revenue) AS rev
+                        FROM sales GROUP BY 1),
+                    g AS (
+                        SELECT month,
+                               ROUND(100.0 * (rev - LAG(rev) OVER (ORDER BY month))
+                                     / LAG(rev) OVER (ORDER BY month), 2) AS pct_change
+                        FROM m)
+                    SELECT month, pct_change FROM g
+                    WHERE month >= '2011-01' AND month <= '2011-12' ORDER BY month"""},
+    {"id": "q44", "category": "hard_cohort",
+     "question": "Among customers whose first-ever order was in 2010, how many also placed an order in 2011?",
+     "gold_sql": """WITH f AS (
+                        SELECT customer_id,
+                               MIN(EXTRACT(year FROM invoice_date)) AS first_year,
+                               MAX(EXTRACT(year FROM invoice_date)) AS last_year
+                        FROM sales WHERE customer_id IS NOT NULL GROUP BY customer_id)
+                    SELECT COUNT(*) AS customers FROM f
+                    WHERE first_year = 2010 AND last_year = 2011"""},
+    {"id": "q45", "category": "hard_cohort",
+     "question": "What percentage of customers who ordered in 2010 also ordered in 2011?",
+     "gold_sql": """WITH y AS (
+                        SELECT customer_id, EXTRACT(year FROM invoice_date) AS yr
+                        FROM sales WHERE customer_id IS NOT NULL GROUP BY 1, 2),
+                    c10 AS (SELECT customer_id FROM y WHERE yr = 2010),
+                    c11 AS (SELECT customer_id FROM y WHERE yr = 2011)
+                    SELECT ROUND(100.0 * (SELECT COUNT(*) FROM c10
+                                          WHERE customer_id IN (SELECT customer_id FROM c11))
+                                 / (SELECT COUNT(*) FROM c10), 2) AS retention_pct"""},
+    {"id": "q46", "category": "hard_ratio",
+     "question": "Among countries with at least 50 invoices, which has the highest average order value?",
+     "gold_sql": """SELECT country FROM sales
+                    GROUP BY country HAVING COUNT(DISTINCT invoice) >= 50
+                    ORDER BY SUM(revenue) / COUNT(DISTINCT invoice) DESC LIMIT 1"""},
+    {"id": "q47", "category": "hard_dates",
+     "question": "How much revenue did we make in the fourth quarter of 2010?",
+     "gold_sql": """SELECT ROUND(SUM(revenue), 2) AS revenue FROM sales
+                    WHERE invoice_date >= '2010-10-01' AND invoice_date < '2011-01-01'"""},
+    {"id": "q48", "category": "hard_ratio",
+     "question": "What percentage of total revenue comes from the 5 stock codes with the highest revenue?",
+     "gold_sql": """WITH p AS (SELECT stock_code, SUM(revenue) AS rev FROM sales GROUP BY stock_code),
+                    top5 AS (SELECT rev FROM p ORDER BY rev DESC LIMIT 5)
+                    SELECT ROUND(100.0 * (SELECT SUM(rev) FROM top5)
+                                 / (SELECT SUM(rev) FROM p), 2) AS top5_share_pct"""},
+    {"id": "q49", "category": "hard_definition",
+     "question": "Among customers with at least 20 invoices (counting cancelled invoices too), which customer has the highest cancellation rate, defined as cancelled invoices divided by all invoices?",
+     "gold_sql": """SELECT customer_id FROM transactions
+                    WHERE customer_id IS NOT NULL
+                    GROUP BY customer_id HAVING COUNT(DISTINCT invoice) >= 20
+                    ORDER BY COUNT(DISTINCT CASE WHEN is_cancelled THEN invoice END) * 1.0
+                             / COUNT(DISTINCT invoice) DESC LIMIT 1"""},
+    {"id": "q50", "category": "hard_window",
+     "question": "On average, how many days pass between a customer's first and second order? Ignore time of day and only include customers with at least two orders.",
+     "gold_sql": """WITH o AS (
+                        SELECT customer_id, invoice, MIN(invoice_date) AS d
+                        FROM sales WHERE customer_id IS NOT NULL GROUP BY customer_id, invoice),
+                    r AS (
+                        SELECT customer_id, d,
+                               ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY d, invoice) AS rn
+                        FROM o)
+                    SELECT ROUND(AVG(DATE_DIFF('day', CAST(f.d AS DATE), CAST(s.d AS DATE))), 2) AS avg_days
+                    FROM r AS f JOIN r AS s
+                      ON f.customer_id = s.customer_id AND f.rn = 1 AND s.rn = 2"""},
+]
+
+QUESTIONS.extend(BATCH_3)
