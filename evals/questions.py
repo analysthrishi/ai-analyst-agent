@@ -314,3 +314,51 @@ BATCH_3 = [
 ]
 
 QUESTIONS.extend(BATCH_3)
+
+BATCH_4 = [
+    # Window function: the LAG rule on quarters instead of months
+    {"id": "q51", "category": "fresh_window",
+     "question": "What was the quarter-over-quarter revenue growth percentage for each quarter of 2011?",
+     "gold_sql": """WITH q AS (
+                        SELECT EXTRACT(year FROM invoice_date) AS yr,
+                               EXTRACT(quarter FROM invoice_date) AS qtr,
+                               SUM(revenue) AS rev
+                        FROM sales GROUP BY 1, 2),
+                    g AS (
+                        SELECT yr, qtr,
+                               ROUND(100.0 * (rev - LAG(rev) OVER (ORDER BY yr, qtr))
+                                     / LAG(rev) OVER (ORDER BY yr, qtr), 2) AS pct_change
+                        FROM q)
+                    SELECT pct_change FROM g WHERE yr = 2011 ORDER BY qtr"""},
+    # Top-N share: the aggregate-first rule on a different entity and measure
+    {"id": "q52", "category": "fresh_topn",
+     "question": "What percentage of total units sold comes from the top 3 countries by units sold?",
+     "gold_sql": """WITH c AS (SELECT country, SUM(quantity) AS units FROM sales GROUP BY country),
+                    t AS (SELECT units FROM c ORDER BY units DESC LIMIT 3)
+                    SELECT ROUND(100.0 * (SELECT SUM(units) FROM t)
+                                 / (SELECT SUM(units) FROM c), 2) AS top3_share_pct"""},
+    # Order definition: second-to-third instead of first-to-second
+    {"id": "q53", "category": "fresh_order",
+     "question": "On average, how many days pass between a customer's second and third order?",
+     "gold_sql": """WITH o AS (
+                        SELECT customer_id, invoice, MIN(invoice_date) AS d
+                        FROM sales WHERE customer_id IS NOT NULL GROUP BY customer_id, invoice),
+                    r AS (
+                        SELECT customer_id, d,
+                               ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY d, invoice) AS rn
+                        FROM o)
+                    SELECT ROUND(AVG(DATE_DIFF('day', CAST(f.d AS DATE), CAST(s.d AS DATE))), 2) AS avg_days
+                    FROM r AS f JOIN r AS s
+                      ON f.customer_id = s.customer_id AND f.rn = 2 AND s.rn = 3"""},
+    # Top-N share on customers, with the denominator stated to avoid ambiguity
+    {"id": "q54", "category": "fresh_topn",
+     "question": "Considering only customers with a customer ID, what percentage of their total revenue comes from the top 20 customers?",
+     "gold_sql": """WITH c AS (
+                        SELECT customer_id, SUM(revenue) AS rev
+                        FROM sales WHERE customer_id IS NOT NULL GROUP BY customer_id),
+                    t AS (SELECT rev FROM c ORDER BY rev DESC LIMIT 20)
+                    SELECT ROUND(100.0 * (SELECT SUM(rev) FROM t)
+                                 / (SELECT SUM(rev) FROM c), 2) AS top20_share_pct"""},
+]
+
+QUESTIONS.extend(BATCH_4)
