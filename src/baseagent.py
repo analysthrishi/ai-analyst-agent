@@ -63,6 +63,9 @@ SELECT COUNT(*) AS products FROM per_product
   with_prev AS (SELECT month, n, LAG(n) OVER (ORDER BY month) AS prev_n FROM all_months)
   SELECT month, n, prev_n FROM with_prev WHERE month LIKE '2011-%' ORDER BY month
 - For "top N" of any entity (products, stock codes, customers, countries), first aggregate to one row per entity with GROUP BY, then rank and take N. Never rank raw rows. For a share of the total, the denominator is the total across all entities.
+
+- An order is identified by the invoice column. For anything about orders (counting orders, order sequence, gaps between orders, per-order revenue), build one row per order with GROUP BY customer_id, invoice and use MIN(invoice_date) as the order's date. Do not use dates or timestamps as a stand-in for the order.
+
 """
 
 CACHE_PATH = Path("data/llm_cache.json")  # data/ is gitignored

@@ -362,3 +362,31 @@ BATCH_4 = [
 ]
 
 QUESTIONS.extend(BATCH_4)
+
+BATCH_5 = [
+    {"id": "q55", "category": "fresh_order",
+     "question": "What is the average revenue of a customer's first order?",
+     "gold_sql": """WITH o AS (
+                        SELECT customer_id, invoice, MIN(invoice_date) AS d, SUM(revenue) AS rev
+                        FROM sales WHERE customer_id IS NOT NULL GROUP BY customer_id, invoice),
+                    r AS (
+                        SELECT customer_id, rev,
+                               ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY d, invoice) AS rn
+                        FROM o)
+                    SELECT ROUND(AVG(rev), 2) AS avg_first_order_revenue FROM r WHERE rn = 1"""},
+    {"id": "q56", "category": "fresh_order",
+     "question": "Considering only orders placed from Germany, on average how many days pass between a customer's first and second order?",
+     "gold_sql": """WITH o AS (
+                        SELECT customer_id, invoice, MIN(invoice_date) AS d
+                        FROM sales WHERE customer_id IS NOT NULL AND country = 'Germany'
+                        GROUP BY customer_id, invoice),
+                    r AS (
+                        SELECT customer_id, d,
+                               ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY d, invoice) AS rn
+                        FROM o)
+                    SELECT ROUND(AVG(DATE_DIFF('day', CAST(f.d AS DATE), CAST(s.d AS DATE))), 2) AS avg_days
+                    FROM r AS f JOIN r AS s
+                      ON f.customer_id = s.customer_id AND f.rn = 1 AND s.rn = 2"""},
+]
+
+QUESTIONS.extend(BATCH_5)

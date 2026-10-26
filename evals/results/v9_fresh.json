@@ -1,0 +1,60 @@
+{
+  "version": "v9_fresh",
+  "run_at": "2026-10-26T15:13:21.280561",
+  "score": 3,
+  "total": 4,
+  "records": [
+    {
+      "id": "q51",
+      "category": "fresh_window",
+      "question": "What was the quarter-over-quarter revenue growth percentage for each quarter of 2011?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH quarterly_revenue AS (SELECT DATE_TRUNC('QUARTER', invoice_date) AS q_date, SUM(revenue) AS rev FROM sales GROUP BY 1), with_lag AS (SELECT q_date, rev, LAG(rev) OVER (ORDER BY q_date) AS prev_rev FROM quarterly_revenue) SELECT STRFTIME(q_date, '%Y-Q') || CAST(EXTRACT(QUARTER FROM q_date) AS TEXT) AS quarter, ROUND(rev, 2) AS revenue, ROUND(prev_rev, 2) AS previous_revenue, ROUND(((rev - prev_rev) / prev_rev) * 100.0, 2) AS q_o_q_growth_percentage FROM with_lag WHERE EXTRACT(YEAR FROM q_date) = 2011 ORDER BY q_date LIMIT 1000",
+      "error": null,
+      "latency_s": 24.54,
+      "prompt_tokens": 1053,
+      "output_tokens": 226,
+      "attempts": 1
+    },
+    {
+      "id": "q52",
+      "category": "fresh_topn",
+      "question": "What percentage of total units sold comes from the top 3 countries by units sold?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH country_units AS (SELECT country, SUM(quantity) AS units FROM sales GROUP BY country), ranked_countries AS (SELECT units, SUM(units) OVER (ORDER BY units DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_units, SUM(units) OVER () AS total_units FROM country_units), top3_units AS (SELECT units FROM country_units ORDER BY units DESC LIMIT 3) SELECT ROUND(CAST(SUM(units) AS DOUBLE) * 100.0 / (SELECT SUM(quantity) FROM sales), 2) AS percentage FROM top3_units LIMIT 1000",
+      "error": null,
+      "latency_s": 22.51,
+      "prompt_tokens": 1049,
+      "output_tokens": 182,
+      "attempts": 1
+    },
+    {
+      "id": "q53",
+      "category": "fresh_order",
+      "question": "On average, how many days pass between a customer's second and third order?",
+      "status": "ok",
+      "passed": false,
+      "agent_sql": "WITH customer_orders AS (SELECT DISTINCT customer_id, CAST(invoice_date AS DATE) AS order_date FROM sales WHERE NOT customer_id IS NULL), ordered_customer_orders AS (SELECT customer_id, order_date, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date ASC, invoice_date ASC) AS order_num FROM (SELECT DISTINCT customer_id, CAST(invoice_date AS DATE) AS order_date, invoice_date FROM sales WHERE NOT customer_id IS NULL) AS x), ranked_orders AS (SELECT customer_id, MAX(CASE WHEN order_num = 2 THEN order_date END) AS second_order_date, MAX(CASE WHEN order_num = 3 THEN order_date END) AS third_order_date FROM ordered_customer_orders WHERE order_num IN (2, 3) GROUP BY customer_id HAVING COUNT(DISTINCT order_num) = 2), diffs AS (SELECT customer_id, (third_order_date - second_order_date) AS days_diff FROM ranked_orders WHERE NOT second_order_date IS NULL AND NOT third_order_date IS NULL) SELECT ROUND(AVG(days_diff), 2) AS avg_days_between_2nd_and_3rd_order FROM diffs LIMIT 1000",
+      "error": null,
+      "latency_s": 18.18,
+      "prompt_tokens": 1049,
+      "output_tokens": 351,
+      "attempts": 1
+    },
+    {
+      "id": "q54",
+      "category": "fresh_topn",
+      "question": "Considering only customers with a customer ID, what percentage of their total revenue comes from the top 20 customers?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_revenue AS (SELECT customer_id, SUM(revenue) AS total_revenue FROM sales WHERE NOT customer_id IS NULL GROUP BY customer_id), ranked_customers AS (SELECT total_revenue, ROW_NUMBER() OVER (ORDER BY total_revenue DESC) AS rn FROM customer_revenue), totals AS (SELECT SUM(total_revenue) AS grand_total, SUM(CASE WHEN rn <= 20 THEN total_revenue ELSE 0 END) AS top_20_total FROM ranked_customers) SELECT ROUND((top_20_total * 100.0) / grand_total, 2) AS percentage FROM totals LIMIT 1000",
+      "error": null,
+      "latency_s": 20.94,
+      "prompt_tokens": 1055,
+      "output_tokens": 177,
+      "attempts": 1
+    }
+  ]
+}
