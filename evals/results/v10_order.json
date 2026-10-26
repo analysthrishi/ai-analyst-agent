@@ -1,0 +1,47 @@
+{
+  "version": "v10_order",
+  "run_at": "2026-10-26T15:27:47.506884",
+  "score": 3,
+  "total": 3,
+  "records": [
+    {
+      "id": "q53",
+      "category": "fresh_order",
+      "question": "On average, how many days pass between a customer's second and third order?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_orders AS (SELECT customer_id, invoice, MIN(invoice_date) AS order_date FROM sales WHERE NOT customer_id IS NULL GROUP BY customer_id, invoice), ranked_orders AS (SELECT customer_id, order_date, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date, invoice) AS order_seq FROM customer_orders), second_and_third AS (SELECT r2.customer_id, r2.order_date AS second_order_date, r3.order_date AS third_order_date, DATE_DIFF('DAY', r2.order_date, r3.order_date) AS days_between FROM ranked_orders AS r2 JOIN ranked_orders AS r3 ON r2.customer_id = r3.customer_id AND r3.order_seq = 3 WHERE r2.order_seq = 2) SELECT ROUND(AVG(days_between), 2) AS avg_days_between FROM second_and_third LIMIT 1000",
+      "error": null,
+      "latency_s": 19.63,
+      "prompt_tokens": 1123,
+      "output_tokens": 278,
+      "attempts": 1
+    },
+    {
+      "id": "q55",
+      "category": "fresh_order",
+      "question": "What is the average revenue of a customer's first order?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_orders AS (SELECT customer_id, invoice, MIN(invoice_date) AS order_date, SUM(revenue) AS order_revenue FROM sales WHERE NOT customer_id IS NULL GROUP BY customer_id, invoice), first_orders AS (SELECT customer_id, invoice, order_revenue, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date ASC, invoice ASC) AS rn FROM customer_orders) SELECT ROUND(AVG(order_revenue), 2) AS avg_first_order_revenue FROM first_orders WHERE rn = 1 LIMIT 1000",
+      "error": null,
+      "latency_s": 19.77,
+      "prompt_tokens": 1119,
+      "output_tokens": 165,
+      "attempts": 1
+    },
+    {
+      "id": "q56",
+      "category": "fresh_order",
+      "question": "Considering only orders placed from Germany, on average how many days pass between a customer's first and second order?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_orders AS (SELECT customer_id, invoice, MIN(invoice_date) AS order_date FROM sales WHERE country = 'Germany' AND NOT customer_id IS NULL GROUP BY customer_id, invoice), ranked_orders AS (SELECT customer_id, order_date, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date ASC, invoice ASC) AS order_num FROM customer_orders), first_two_orders AS (SELECT customer_id, MAX(CASE WHEN order_num = 1 THEN order_date END) AS first_order_date, MAX(CASE WHEN order_num = 2 THEN order_date END) AS second_order_date FROM ranked_orders WHERE order_num <= 2 GROUP BY customer_id HAVING COUNT(*) = 2) SELECT ROUND(AVG(DATE_DIFF('DAY', first_order_date, second_order_date)), 2) AS avg_days_between FROM first_two_orders LIMIT 1000",
+      "error": null,
+      "latency_s": 22.87,
+      "prompt_tokens": 1129,
+      "output_tokens": 272,
+      "attempts": 1
+    }
+  ]
+}
