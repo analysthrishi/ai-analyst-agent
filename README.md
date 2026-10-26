@@ -59,3 +59,6 @@ Note: 13 questions is a small set. Day 5 expands it to find real weaknesses.
 
 | v9_fresh | 3/4 | Generalisation test: window 1/1, top-N 2/2, order definition 0/1 (near miss) |
 | v10_order | to fill | Rule: orders identified by invoice, plus 2 fresh order questions |
+
+| v10_order | to fill | Order-as-invoice rule + 2 fresh order questions |
+| v10_regress (a+b+c) | to fill / 53 | Full regression under the final prompt |
