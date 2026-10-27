@@ -1,14 +1,19 @@
 import json
+import logging
 import time
+import uuid
 
 from google.genai import types
 
 import baseagent as base
 import tools as tool_impl
 from guardrails import validate_sql
+from tracing import SessionBudget, log_trace
 
 MAX_STEPS = 6
 MAX_ROWS_TO_MODEL = 50
+
+log = logging.getLogger(__name__)
 
 TOOL_ADDENDUM = """
 
@@ -104,15 +109,30 @@ def execute_tool(name: str, args: dict, state: dict) -> dict:
     return {"ok": False, "error": f"Unknown tool: {name}"}
 
 
-def answer_with_tools(question: str) -> dict:
-    state = {"sql": None, "rows": None, "chart_path": None,
-             "blocked": None, "succeeded": False}
+def answer_with_tools(question: str, budget: SessionBudget | None = None) -> dict:
+    log.info("request start: %r", question)
+    result = _run_agent(question, budget)
+    log.info(
+        "request %s done: status=%s steps=%d api_calls=%d tokens=%d/%d latency=%.2fs tools=%s",
+        result["request_id"], result["status"], result["steps"], result["api_calls"],
+        result["prompt_tokens"], result["output_tokens"], result["latency_s"],
+        [c["name"] for c in result["tool_calls"]],
+    )
+    log_trace(result)
+    return result
+
+
+def _run_agent(question: str, budget: SessionBudget | None = None) -> dict:
     result = {
+        "request_id": uuid.uuid4().hex[:8],
         "question": question, "status": None, "answer": None, "error": None,
         "tool_calls": [], "sql": None, "rows": None, "chart_path": None,
         "steps": 0, "api_calls": 0,
         "latency_s": 0.0, "prompt_tokens": 0, "output_tokens": 0,
     }
+    rid = result["request_id"]
+    state = {"sql": None, "rows": None, "chart_path": None,
+             "blocked": None, "succeeded": False}
 
     contents = [types.Content(role="user", parts=[types.Part.from_text(text=question)])]
     config = types.GenerateContentConfig(
@@ -124,20 +144,36 @@ def answer_with_tools(question: str) -> dict:
 
     for step in range(MAX_STEPS):
         result["steps"] = step + 1
+        if budget is not None and budget.exceeded():
+            result.update(
+                status="budget_exceeded", error=budget.reason(),
+                sql=state["sql"], rows=state["rows"], chart_path=state["chart_path"],
+            )
+            return result
         start = time.time()
         try:
             resp = base.client.models.generate_content(
                 model=base.MODEL, contents=contents, config=config
             )
         except Exception as e:
+            log.warning("request %s step %d: API call failed: %s", rid, step + 1, e)
+            if budget is not None:
+                budget.add(0, 0)  # a failed call may still use quota
             result.update(status="api_error", error=str(e))
             return result
 
+        elapsed = time.time() - start
         result["api_calls"] += 1
-        result["latency_s"] = round(result["latency_s"] + (time.time() - start), 2)
+        result["latency_s"] = round(result["latency_s"] + elapsed, 2)
         usage = getattr(resp, "usage_metadata", None)
-        result["prompt_tokens"] += getattr(usage, "prompt_token_count", 0) or 0
-        result["output_tokens"] += getattr(usage, "candidates_token_count", 0) or 0
+        prompt_tokens = getattr(usage, "prompt_token_count", 0) or 0
+        output_tokens = getattr(usage, "candidates_token_count", 0) or 0
+        result["prompt_tokens"] += prompt_tokens
+        result["output_tokens"] += output_tokens
+        if budget is not None:
+            budget.add(prompt_tokens, output_tokens)
+        log.debug("request %s step %d: API call ok in %.2fs, tokens %d/%d",
+                  rid, step + 1, elapsed, prompt_tokens, output_tokens)
 
         if not resp.candidates or not resp.candidates[0].content:
             result.update(status="empty_reply", error="Model returned no content.")
@@ -168,6 +204,8 @@ def answer_with_tools(question: str) -> dict:
         for fc in calls:
             args = dict(fc.args) if fc.args else {}
             out = execute_tool(fc.name, args, state)
+            log.debug("request %s tool %s ok=%s args=%s error=%s", rid, fc.name,
+                      bool(out.get("ok")), args, out.get("error"))
             result["tool_calls"].append(
                 {"name": fc.name, "args": args, "ok": bool(out.get("ok"))}
             )
@@ -184,28 +222,37 @@ def answer_with_tools(question: str) -> dict:
 if __name__ == "__main__":
     import traceback
 
-    q = input("Ask a question: ").strip()
-    print(f"\nQuestion received: {q!r}")
-    print("Calling Gemini (can take 10-60 seconds)...", flush=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    budget = SessionBudget(max_api_calls=20)
 
-    try:
-        out = answer_with_tools(q)
-    except Exception:
-        traceback.print_exc()
-        raise SystemExit(1)
+    while True:
+        q = input("\nAsk a question (blank to quit): ").strip()
+        if not q:
+            break
+        print(f"\nQuestion received: {q!r}")
+        print("Calling Gemini (can take 10-60 seconds)...", flush=True)
 
-    print("\nStatus:", out["status"])
-    for c in out["tool_calls"]:
-        print("Tool:", c["name"], "| ok:", c["ok"])
-        print("   args:", c["args"])
-        if c.get("error"):
-            print("   error:", c["error"])
-    if out["sql"]:
-        print("SQL:", out["sql"])
-    if out["chart_path"]:
-        print("Chart saved:", out["chart_path"])
-    if out["error"]:
-        print("Error:", out["error"])
-    print("API calls:", out["api_calls"], "| tokens in/out:",
-          out["prompt_tokens"], "/", out["output_tokens"])
-    print("\nAnswer:", out["answer"])
+        try:
+            out = answer_with_tools(q, budget)
+        except Exception:
+            traceback.print_exc()
+            raise SystemExit(1)
+
+        print("\nStatus:", out["status"])
+        for c in out["tool_calls"]:
+            print("Tool:", c["name"], "| ok:", c["ok"])
+            print("   args:", c["args"])
+            if c.get("error"):
+                print("   error:", c["error"])
+        if out["sql"]:
+            print("SQL:", out["sql"])
+        if out["chart_path"]:
+            print("Chart saved:", out["chart_path"])
+        if out["error"]:
+            print("Error:", out["error"])
+        print("API calls:", out["api_calls"], "| tokens in/out:",
+              out["prompt_tokens"], "/", out["output_tokens"])
+        print("Budget:", budget.summary())
+        print("\nAnswer:", out["answer"])
+        if out["status"] == "budget_exceeded":
+            break
