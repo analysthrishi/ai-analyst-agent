@@ -6,8 +6,8 @@ from pathlib import Path
 TRACE_PATH = Path("outputs/traces.jsonl")
 
 # USD per 1M tokens. Placeholders: fill in the real Gemini prices for your model.
-PRICE_PER_M_INPUT = 0.0
-PRICE_PER_M_OUTPUT = 0.0
+PRICE_PER_M_INPUT = 0.30
+PRICE_PER_M_OUTPUT = 2.50
 
 log = logging.getLogger(__name__)
 

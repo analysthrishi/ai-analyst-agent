@@ -35,9 +35,10 @@ def sample_result(**overrides):
 
 # --- estimate_cost ---
 
-def test_cost_is_zero_with_default_prices():
+def test_cost_is_zero_when_prices_are_zero(monkeypatch):
+    monkeypatch.setattr(tracing, "PRICE_PER_M_INPUT", 0.0)
+    monkeypatch.setattr(tracing, "PRICE_PER_M_OUTPUT", 0.0)
     assert estimate_cost(1_000_000, 1_000_000) == 0.0
-
 
 def test_cost_uses_prices(prices):
     assert estimate_cost(1_000_000, 500_000) == pytest.approx(1.0 + 2.0)
@@ -161,3 +162,9 @@ def test_report_counts_and_averages(trace_file):
 
 def test_report_with_no_records():
     assert build_report([]) == "No traces yet."
+
+def test_cost_math_with_known_prices(monkeypatch):
+    monkeypatch.setattr(tracing, "PRICE_PER_M_INPUT", 0.30)
+    monkeypatch.setattr(tracing, "PRICE_PER_M_OUTPUT", 2.50)
+    assert estimate_cost(1_000_000, 1_000_000) == 2.8
+    assert estimate_cost(1000, 500) == 0.00155
