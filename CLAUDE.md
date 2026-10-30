@@ -21,6 +21,7 @@ RFM tools, guardrails, tracing, and an eval suite.
 - SQL evals: `uv run python evals/run_evals.py <version> [q01,q02,...]`
 - Tool evals: `uv run python evals/run_tool_evals.py <version>`
 - Trace summary: `uv run python src/trace_report.py`
+- API server: `uv run uvicorn --app-dir src api:app --reload` (calls Gemini on /ask)
 - Run scripts from the repo root; paths like `data/retail.duckdb` are relative.
 
 ## Layout
@@ -29,6 +30,7 @@ RFM tools, guardrails, tracing, and an eval suite.
 - `src/tools.py`: tool implementations; `src/guardrails.py`: sqlglot validator
 - `src/tracing.py`: `SessionBudget` and `log_trace` (must not import agent_tools, baseagent or google)
 - `src/trace_report.py`: summarises `outputs/traces.jsonl`
+- `src/api.py`: FastAPI backend (`/health`, `/ask`, `/charts/{name}`); per-request and daily API-call budgets (MAX_DAILY_API_CALLS), optional X-API-Key (API_ACCESS_KEY); imports agent_tools lazily in `_answer`
 - `evals/questions.py`: questions and gold SQL; `evals/results/*.json`: saved runs
 - `docs/glossary.md`: business definitions, injected into SYSTEM_PROMPT
 - `tests/`: pytest suite

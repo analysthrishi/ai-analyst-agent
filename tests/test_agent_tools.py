@@ -125,6 +125,16 @@ def test_each_run_writes_one_trace(fake, trace_file):
     assert [json.loads(line)["question"] for line in lines] == ["q1", "q2"]
 
 
+def test_run_sql_stores_columns(monkeypatch):
+    monkeypatch.setattr(agent_tools.base, "run_sql", lambda sql: (["a"], [(1,)]))
+    state = {"sql": None, "columns": None, "rows": None, "chart_path": None,
+             "blocked": None, "succeeded": False}
+    out = agent_tools.execute_tool("run_sql", {"sql": "SELECT 1 AS a"}, state)
+    assert out["ok"]
+    assert state["columns"] == ["a"]
+    assert state["rows"] == [(1,)]
+
+
 def test_request_is_logged(fake, caplog):
     fake(tool_reply("nope"), text_reply("Done."))
     with caplog.at_level(logging.DEBUG, logger="agent_tools"):

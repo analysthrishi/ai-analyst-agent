@@ -84,7 +84,7 @@ def execute_tool(name: str, args: dict, state: dict) -> dict:
             columns, rows = base.run_sql(safe_sql)
         except Exception as e:
             return {"ok": False, "error": f"SQL failed: {e}"}
-        state.update(sql=safe_sql, rows=rows, succeeded=True)
+        state.update(sql=safe_sql, columns=columns, rows=rows, succeeded=True)
         return _jsonable({
             "ok": True, "columns": columns, "row_count": len(rows),
             "rows": [list(r) for r in rows[:MAX_ROWS_TO_MODEL]],
@@ -126,12 +126,12 @@ def _run_agent(question: str, budget: SessionBudget | None = None) -> dict:
     result = {
         "request_id": uuid.uuid4().hex[:8],
         "question": question, "status": None, "answer": None, "error": None,
-        "tool_calls": [], "sql": None, "rows": None, "chart_path": None,
+        "tool_calls": [], "sql": None, "columns": None, "rows": None, "chart_path": None,
         "steps": 0, "api_calls": 0,
         "latency_s": 0.0, "prompt_tokens": 0, "output_tokens": 0,
     }
     rid = result["request_id"]
-    state = {"sql": None, "rows": None, "chart_path": None,
+    state = {"sql": None, "columns": None, "rows": None, "chart_path": None,
              "blocked": None, "succeeded": False}
 
     contents = [types.Content(role="user", parts=[types.Part.from_text(text=question)])]
@@ -147,7 +147,8 @@ def _run_agent(question: str, budget: SessionBudget | None = None) -> dict:
         if budget is not None and budget.exceeded():
             result.update(
                 status="budget_exceeded", error=budget.reason(),
-                sql=state["sql"], rows=state["rows"], chart_path=state["chart_path"],
+                sql=state["sql"], columns=state["columns"], rows=state["rows"],
+                chart_path=state["chart_path"],
             )
             return result
         start = time.time()
@@ -196,7 +197,8 @@ def _run_agent(question: str, budget: SessionBudget | None = None) -> dict:
                 result.update(status="blocked", error=state["blocked"])
             else:
                 result["status"] = "no_tool_result"
-            result.update(sql=state["sql"], rows=state["rows"], chart_path=state["chart_path"])
+            result.update(sql=state["sql"], columns=state["columns"], rows=state["rows"],
+                          chart_path=state["chart_path"])
             return result
 
         contents.append(model_content)
@@ -215,7 +217,8 @@ def _run_agent(question: str, budget: SessionBudget | None = None) -> dict:
         contents.append(types.Content(role="user", parts=response_parts))
 
     result.update(status="max_steps", error=f"No final answer after {MAX_STEPS} steps.",
-                  sql=state["sql"], rows=state["rows"], chart_path=state["chart_path"])
+                  sql=state["sql"], columns=state["columns"], rows=state["rows"],
+                  chart_path=state["chart_path"])
     return result
 
 
