@@ -22,6 +22,7 @@ RFM tools, guardrails, tracing, and an eval suite.
 - Tool evals: `uv run python evals/run_tool_evals.py <version>`
 - Trace summary: `uv run python src/trace_report.py`
 - API server: `uv run uvicorn --app-dir src api:app --reload` (calls Gemini on /ask)
+- Front end: `uv run streamlit run app/streamlit_app.py`. Start the API server first; set API_URL (default http://127.0.0.1:8000) and API_ACCESS_KEY in the environment if needed.
 - Run scripts from the repo root; paths like `data/retail.duckdb` are relative.
 
 ## Layout
@@ -31,6 +32,8 @@ RFM tools, guardrails, tracing, and an eval suite.
 - `src/tracing.py`: `SessionBudget` and `log_trace` (must not import agent_tools, baseagent or google)
 - `src/trace_report.py`: summarises `outputs/traces.jsonl`
 - `src/api.py`: FastAPI backend (`/health`, `/ask`, `/charts/{name}`); per-request and daily API-call budgets (MAX_DAILY_API_CALLS), optional X-API-Key (API_ACCESS_KEY); imports agent_tools lazily in `_answer`
+- `app/client.py`: pure HTTP client for the API (builds requests, turns responses/errors into a `Display`); no streamlit import, tested in `tests/test_client.py`
+- `app/streamlit_app.py`: Streamlit UI on top of `client`; keeps session history in `st.session_state`
 - `evals/questions.py`: questions and gold SQL; `evals/results/*.json`: saved runs
 - `docs/glossary.md`: business definitions, injected into SYSTEM_PROMPT
 - `tests/`: pytest suite
