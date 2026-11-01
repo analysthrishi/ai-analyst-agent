@@ -23,6 +23,7 @@ RFM tools, guardrails, tracing, and an eval suite.
 - Trace summary: `uv run python src/trace_report.py`
 - API server: `uv run uvicorn --app-dir src api:app --reload` (calls Gemini on /ask)
 - Front end: `uv run streamlit run app/streamlit_app.py`. Start the API server first; set API_URL (default http://127.0.0.1:8000) and API_ACCESS_KEY in the environment if needed.
+- Docker: `docker compose up --build` (build the DB first; it is mounted read-only at /app/data). API on :8000, UI on :8501.
 - Run scripts from the repo root; paths like `data/retail.duckdb` are relative.
 
 ## Layout
@@ -36,7 +37,10 @@ RFM tools, guardrails, tracing, and an eval suite.
 - `app/streamlit_app.py`: Streamlit UI on top of `client`; keeps session history in `st.session_state`
 - `evals/questions.py`: questions and gold SQL; `evals/results/*.json`: saved runs
 - `docs/glossary.md`: business definitions, injected into SYSTEM_PROMPT
-- `tests/`: pytest suite
+- `tests/`: pytest suite. `test_agent_tools.py` imports agent_tools lazily and skips without `data/retail.duckdb`, GEMINI_API_KEY and GEMINI_MODEL; DB-backed tests in `test_tools.py` skip without the database
+- `.github/workflows/ci.yml`: runs `uv sync --locked` and `uv run pytest -q` on push/PR to main (no secrets, no data/, no Gemini calls)
+- `Dockerfile`: python 3.13-slim + uv, `uv sync --frozen --no-dev`, copies only src/, app/, docs/glossary.md; non-root; runs uvicorn on 8000
+- `.dockerignore`; `docker-compose.yml`: `api` (env_file .env, ./data:ro, ./outputs, healthcheck /health) and `app` (Streamlit on 8501, API_URL=http://api:8000)
 
 ## Safety
 - Open the database with `read_only=True` everywhere except `clean_and_load.py`.

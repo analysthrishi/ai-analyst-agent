@@ -1,0 +1,30 @@
+services:
+  api:
+    build: .
+    image: ai-analyst-agent
+    env_file: .env
+    volumes:
+      - ./data:/app/data:ro
+      - ./outputs:/app/outputs
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  app:
+    build: .  # same image as api; the second build is fully cached
+    image: ai-analyst-agent
+    command: ["streamlit", "run", "app/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    environment:
+      API_URL: http://api:8000
+      # Substituted from .env by Compose, so this container never gets GEMINI_API_KEY.
+      API_ACCESS_KEY: ${API_ACCESS_KEY:-}
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy

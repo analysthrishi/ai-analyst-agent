@@ -1,13 +1,25 @@
 import json
 import logging
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from dotenv import load_dotenv
 
-import agent_tools
 import tracing
-from agent_tools import answer_with_tools
 from tracing import SessionBudget
+
+# baseagent reads the database and these env vars at import time, so agent_tools
+# is imported lazily (in the fixture below) and the module is skipped without them.
+load_dotenv()
+DB_PATH = Path("data/retail.duckdb")
+MISSING = ([] if DB_PATH.exists() else [str(DB_PATH)]) + [
+    name for name in ("GEMINI_API_KEY", "GEMINI_MODEL") if not os.getenv(name)
+]
+pytestmark = pytest.mark.skipif(
+    bool(MISSING), reason=f"baseagent needs at import: {', '.join(MISSING)} (missing)"
+)
 
 
 def text_reply(text):
@@ -52,7 +64,18 @@ def trace_file(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def fake(monkeypatch):
+def agent_tools():
+    import agent_tools
+    return agent_tools
+
+
+@pytest.fixture
+def answer_with_tools(agent_tools):
+    return agent_tools.answer_with_tools
+
+
+@pytest.fixture
+def fake(monkeypatch, agent_tools):
     def install(*replies):
         client = FakeClient(replies)
         monkeypatch.setattr(agent_tools.base, "client", client)
@@ -60,7 +83,7 @@ def fake(monkeypatch):
     return install
 
 
-def test_no_budget_behaves_as_before(fake):
+def test_no_budget_behaves_as_before(fake, answer_with_tools):
     client = fake(text_reply("Done."))
     out = answer_with_tools("q")
     assert out["status"] == "no_tool_result"
@@ -69,7 +92,7 @@ def test_no_budget_behaves_as_before(fake):
     assert out["request_id"]
 
 
-def test_budget_stops_mid_question(fake):
+def test_budget_stops_mid_question(fake, answer_with_tools):
     # "nope" is an unknown tool, so no database is needed.
     client = fake(tool_reply("nope"), text_reply("Done."))
     budget = SessionBudget(max_api_calls=1)
@@ -80,7 +103,7 @@ def test_budget_stops_mid_question(fake):
     assert budget.api_calls == 1
 
 
-def test_budget_spans_questions(fake):
+def test_budget_spans_questions(fake, answer_with_tools):
     client = fake(text_reply("a"), text_reply("b"), text_reply("c"))
     budget = SessionBudget(max_api_calls=2)
     assert answer_with_tools("q1", budget)["status"] == "no_tool_result"
@@ -91,7 +114,7 @@ def test_budget_spans_questions(fake):
     assert client.calls == 2
 
 
-def test_budget_gets_token_counts(fake):
+def test_budget_gets_token_counts(fake, answer_with_tools):
     fake(tool_reply("nope"), text_reply("Done."))
     budget = SessionBudget()
     answer_with_tools("q", budget)
@@ -99,7 +122,7 @@ def test_budget_gets_token_counts(fake):
     assert budget.output_tokens == 10
 
 
-def test_budget_token_limit_stops_agent(fake):
+def test_budget_token_limit_stops_agent(fake, answer_with_tools):
     client = fake(tool_reply("nope"), text_reply("Done."))
     budget = SessionBudget(max_tokens=15)
     out = answer_with_tools("q", budget)
@@ -108,7 +131,7 @@ def test_budget_token_limit_stops_agent(fake):
     assert client.calls == 1
 
 
-def test_failed_call_counts_toward_budget(fake):
+def test_failed_call_counts_toward_budget(fake, answer_with_tools):
     fake(RuntimeError("quota"))
     budget = SessionBudget(max_api_calls=5)
     out = answer_with_tools("q", budget)
@@ -117,7 +140,7 @@ def test_failed_call_counts_toward_budget(fake):
     assert budget.api_calls == 1
 
 
-def test_each_run_writes_one_trace(fake, trace_file):
+def test_each_run_writes_one_trace(fake, trace_file, answer_with_tools):
     fake(text_reply("a"), text_reply("b"))
     answer_with_tools("q1")
     answer_with_tools("q2")
@@ -125,7 +148,7 @@ def test_each_run_writes_one_trace(fake, trace_file):
     assert [json.loads(line)["question"] for line in lines] == ["q1", "q2"]
 
 
-def test_run_sql_stores_columns(monkeypatch):
+def test_run_sql_stores_columns(monkeypatch, agent_tools):
     monkeypatch.setattr(agent_tools.base, "run_sql", lambda sql: (["a"], [(1,)]))
     state = {"sql": None, "columns": None, "rows": None, "chart_path": None,
              "blocked": None, "succeeded": False}
@@ -135,7 +158,7 @@ def test_run_sql_stores_columns(monkeypatch):
     assert state["rows"] == [(1,)]
 
 
-def test_request_is_logged(fake, caplog):
+def test_request_is_logged(fake, caplog, answer_with_tools):
     fake(tool_reply("nope"), text_reply("Done."))
     with caplog.at_level(logging.DEBUG, logger="agent_tools"):
         out = answer_with_tools("q")

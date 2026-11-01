@@ -1,0 +1,11 @@
+.venv
+data/
+outputs/
+.env
+.env.*
+__pycache__/
+*.py[oc]
+.git
+.github
+.pytest_cache
+evals/results/
