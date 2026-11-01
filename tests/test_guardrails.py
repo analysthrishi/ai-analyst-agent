@@ -49,6 +49,44 @@ def test_existing_limit_kept():
     assert "LIMIT 5" in safe.upper()
 
 
+INVISIBLE_CHARS = "​‌‍⁠﻿ "
+
+
+def test_zero_width_space_q30_passes():
+    sql = ("SELECT COUNT(DISTINCT customer_id) AS customers\nFROM sales\n"
+           "​WHERE country = 'France' AND customer_id IS NOT NULL;")
+    ok, reason, safe = validate_sql(sql)
+    assert ok, reason
+    assert not any(c in safe for c in INVISIBLE_CHARS)
+
+
+def test_nbsp_between_words_passes():
+    ok, reason, safe = validate_sql("SELECT country FROM sales")
+    assert ok, reason
+    assert " " not in safe
+
+
+@pytest.mark.parametrize("sql", [
+    "DR​OP TABLE sales",
+    "DELETE​ FROM transactions",
+    "SELECT 1;​ DROP TABLE sales",
+])
+def test_invisible_chars_do_not_unblock_dangerous_queries(sql):
+    ok, reason, safe = validate_sql(sql)
+    assert not ok, f"Should have been blocked: {sql!r}"
+    assert safe is None
+    # Blocked by the real rules after normalising, not by a parse error
+    assert not reason.startswith("Could not parse"), reason
+
+
+@pytest.mark.parametrize("sql", ["SELECT (1 FROM sales", "SELECT * FROM sales WHERE"])
+def test_parse_error_has_no_ansi_codes(sql):
+    ok, reason, _ = validate_sql(sql)
+    assert not ok
+    assert reason.startswith("Could not parse"), reason
+    assert "\x1b" not in reason
+
+
 @pytest.mark.parametrize("q", [q for q in QUESTIONS if q["gold_sql"]], ids=lambda q: q["id"])
 def test_all_gold_queries_pass_validator(q):
     ok, reason, _ = validate_sql(q["gold_sql"])

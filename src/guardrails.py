@@ -1,3 +1,5 @@
+import re
+
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
@@ -22,16 +24,23 @@ BLOCKED_NODES = tuple(
 BLOCKED_FUNCTIONS = {"glob", "getenv", "load_extension", "install_extension", "sniff_csv"}
 BLOCKED_FUNCTION_PREFIXES = ("read_", "write_")
 
+# Invisible characters models sometimes emit; removed (NBSP -> space) before parsing
+_INVISIBLE = dict.fromkeys(map(ord, "​‌‍⁠﻿"), None) | {0x00A0: " "}
+# sqlglot underlines the bad token in parse errors with terminal escape codes
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
 
 def validate_sql(sql: str) -> tuple[bool, str, str | None]:
     """Return (ok, reason, safe_sql). safe_sql has a LIMIT added if missing."""
+    if sql:
+        sql = sql.translate(_INVISIBLE)
     if not sql or not sql.strip():
         return False, "Empty query.", None
 
     try:
         statements = [s for s in sqlglot.parse(sql, read="duckdb") if s is not None]
     except ParseError as e:
-        return False, f"Could not parse SQL: {str(e)[:150]}", None
+        return False, f"Could not parse SQL: {_ANSI_ESCAPE.sub('', str(e))[:150]}", None
 
     if len(statements) != 1:
         return False, "Exactly one SQL statement is allowed.", None

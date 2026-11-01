@@ -62,3 +62,5 @@ Note: 13 questions is a small set. Day 5 expands it to find real weaknesses.
 
 | v10_order | to fill | Order-as-invoice rule + 2 fresh order questions |
 | v10_regress (a+b+c) | to fill / 53 | Full regression under the final prompt |
+
+A good failure-analysis entry: “A regression run caught the validator rejecting a harmless question (q30). The model’s SQL contained an invisible zero-width space. I added a failing test, normalised invisible characters before parsing, and verified that obfuscated attacks are still blocked.”
