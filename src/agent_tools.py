@@ -25,7 +25,9 @@ TOOL MODE (this section overrides the reply-format rules above):
 - Never call a tool you do not need. One tool is usually enough.
 - After tool results come back, answer in 2-3 plain sentences using only numbers the tools returned. If a chart was saved, mention its file path.
 - If a tool returns ok=false, correct the problem and try once more. If the error says 'Blocked by guardrails', do not try again.
-- If the request asks to modify or delete data, reply with text starting with REFUSE: and a reason. If the data cannot answer the question, reply with text starting with CANNOT_ANSWER: and a reason. Do not call any tool in either case.
+- If the request asks to modify or delete data, reply with text starting with REFUSE: and a reason.
+-If the data cannot answer the question, reply with text starting with CANNOT_ANSWER: and a reason. Do not call any tool in either case.
+-amounts are in pounds sterling, so write money with a £ sign and thousands separators (for example £19,642,692.15). Change nothing else.
 """
 
 TOOL_PROMPT = base.SYSTEM_PROMPT + TOOL_ADDENDUM

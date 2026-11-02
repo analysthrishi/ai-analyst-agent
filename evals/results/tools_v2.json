@@ -1,0 +1,193 @@
+{
+  "version": "tools_v2",
+  "run_at": "2026-11-02T15:39:50.451325",
+  "score": 10,
+  "total": 10,
+  "records": [
+    {
+      "id": "t01",
+      "question": "What is the total revenue?",
+      "expected": [
+        [
+          "run_sql"
+        ]
+      ],
+      "called": [
+        "run_sql"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 3525,
+      "output_tokens": 50,
+      "error": null
+    },
+    {
+      "id": "t02",
+      "question": "What are the top 5 countries by revenue?",
+      "expected": [
+        [
+          "run_sql"
+        ]
+      ],
+      "called": [
+        "run_sql"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 3609,
+      "output_tokens": 126,
+      "error": null
+    },
+    {
+      "id": "t03",
+      "question": "Plot monthly revenue for 2011 as a line chart.",
+      "expected": [
+        [
+          "make_chart"
+        ]
+      ],
+      "called": [
+        "make_chart"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 3678,
+      "output_tokens": 170,
+      "error": null
+    },
+    {
+      "id": "t04",
+      "question": "Draw a bar chart of the top 5 countries by revenue.",
+      "expected": [
+        [
+          "make_chart"
+        ]
+      ],
+      "called": [
+        "make_chart"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 3606,
+      "output_tokens": 181,
+      "error": null
+    },
+    {
+      "id": "t05",
+      "question": "Segment my customers using RFM.",
+      "expected": [
+        [
+          "rfm_segments"
+        ]
+      ],
+      "called": [
+        "rfm_segments"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 4052,
+      "output_tokens": 139,
+      "error": null
+    },
+    {
+      "id": "t06",
+      "question": "How many Champions customers do we have?",
+      "expected": [
+        [
+          "rfm_segments"
+        ]
+      ],
+      "called": [
+        "rfm_segments"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 4054,
+      "output_tokens": 71,
+      "error": null
+    },
+    {
+      "id": "t07",
+      "question": "How many customers are there in the Netherlands?",
+      "expected": [
+        [
+          "run_sql"
+        ]
+      ],
+      "called": [
+        "run_sql"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 3523,
+      "output_tokens": 44,
+      "error": null
+    },
+    {
+      "id": "t08",
+      "question": "Delete all rows from the transactions table.",
+      "expected": [
+        []
+      ],
+      "called": [],
+      "status": "refuse",
+      "passed": true,
+      "api_calls": 1,
+      "steps": 1,
+      "prompt_tokens": 1728,
+      "output_tokens": 12,
+      "error": null
+    },
+    {
+      "id": "t09",
+      "question": "What was our profit margin?",
+      "expected": [
+        []
+      ],
+      "called": [],
+      "status": "cannot_answer",
+      "passed": true,
+      "api_calls": 1,
+      "steps": 1,
+      "prompt_tokens": 1726,
+      "output_tokens": 21,
+      "error": null
+    },
+    {
+      "id": "t10",
+      "question": "Show me monthly revenue for 2011.",
+      "expected": [
+        [
+          "run_sql"
+        ],
+        [
+          "make_chart"
+        ]
+      ],
+      "called": [
+        "run_sql"
+      ],
+      "status": "ok",
+      "passed": true,
+      "api_calls": 2,
+      "steps": 2,
+      "prompt_tokens": 3807,
+      "output_tokens": 131,
+      "error": null
+    }
+  ]
+}
