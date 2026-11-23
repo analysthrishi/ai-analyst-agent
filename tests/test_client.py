@@ -274,3 +274,35 @@ def test_fetch_chart_refuses_other_hosts(monkeypatch, url):
         raise AssertionError("should not fetch")
     monkeypatch.setattr(client.requests, "get", never)
     assert client.fetch_chart(url) is None
+
+
+# --- public deployment: no "start the server" hint, per-session question limit ---
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:8000", "http://localhost:8000", "http://[::1]:8000"])
+def test_local_api_keeps_the_start_hint(post, monkeypatch, url):
+    monkeypatch.setenv("API_URL", url)
+    post.raises = requests.ConnectionError("down")
+    assert "uvicorn" in client.ask("q?").message
+
+
+def test_public_api_error_has_no_local_hint(post, monkeypatch):
+    monkeypatch.setenv("API_URL", "https://my-api.onrender.com")
+    post.raises = requests.ConnectionError("socket-detail-xyz")
+    message = client.ask("q?").message
+    assert "uvicorn" not in message
+    assert "uv run" not in message
+    assert "waking up" in message
+    assert "socket-detail-xyz" not in message
+
+
+def test_question_limit_defaults_to_ten(monkeypatch):
+    monkeypatch.delenv("MAX_QUESTIONS_PER_SESSION", raising=False)
+    assert client.question_limit() == 10
+    assert not client.limit_reached(9)
+    assert client.limit_reached(10)
+
+
+@pytest.mark.parametrize("value,expected", [("3", 3), ("0", 1), ("-5", 1), ("abc", 10), ("", 10)])
+def test_question_limit_env_override(monkeypatch, value, expected):
+    monkeypatch.setenv("MAX_QUESTIONS_PER_SESSION", value)
+    assert client.question_limit() == expected

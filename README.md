@@ -99,8 +99,39 @@ attacks are still blocked.
 
 More entries are in [`docs/failure_note.md`](docs/failure_note.md).
 
+## Deployment
+The app is two services. Streamlit Community Cloud runs Python scripts from a GitHub
+repo and does not use Dockerfiles, so the Docker image is for the API host only.
+
+| Part | Where | Files |
+|---|---|---|
+| API (FastAPI + DuckDB + Gemini) | Render (Docker web service, builds from GitHub) | `Dockerfile.render` |
+| UI (Streamlit) | Streamlit Community Cloud | `app/streamlit_app.py`, `app/requirements.txt` |
+
+`Dockerfile.render` downloads `retail.duckdb` at build time from a GitHub Release
+(tag `data-v1`), so the database never enters git. Build the database locally with
+`uv run python src/clean_and_load.py`, then attach `data/retail.duckdb` to that release.
+
+**API (Render):** New Web Service, connect this repo, language Docker, Dockerfile path
+`./Dockerfile.render`, health check path `/health`. Environment variables:
+`GEMINI_API_KEY`, `GEMINI_MODEL`, `API_ACCESS_KEY` (a long random string; without it the
+API is open) and `MAX_DAILY_API_CALLS` (for example 20). Also set a spend or quota limit on the Gemini key.
+
+**UI (Streamlit Community Cloud):** new app from this repo, branch `main`, main file
+`app/streamlit_app.py`, Python 3.13. In Secrets:
+
+    API_URL = "https://<your-service>.onrender.com"
+    API_ACCESS_KEY = "<same value as on Render>"
+
+Limits to know about:
+- The daily call budget is held in memory, so it resets when the API restarts or wakes from idle.
+- Free Render services sleep when idle; the first request after that takes about a minute.
+- Charts and traces are on ephemeral disk and are lost on restart.
+- Each browser session may ask 10 questions (`MAX_QUESTIONS_PER_SESSION` to change). This is a
+  speed bump, not security: reloading the page starts a new session. The real cap is `MAX_DAILY_API_CALLS`.
+
 ## CI and deployment
 GitHub Actions (`.github/workflows/ci.yml`) runs `uv sync --locked` and
 `uv run pytest -q` on push and PR to `main`. It uses no secrets, no `data/` and
 makes no Gemini calls. The `Dockerfile` builds a non-root image that runs
-uvicorn on port 8000.
+uvicorn on port 8000 (used by `docker compose`).

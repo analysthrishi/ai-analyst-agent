@@ -16,6 +16,7 @@ st.set_page_config(page_title="AI Analyst Agent", page_icon="📊")
 st.session_state.setdefault("question", "")
 st.session_state.setdefault("history", [])
 st.session_state.setdefault("run", False)
+st.session_state.setdefault("asked", 0)
 
 
 def _use_example(q: str) -> None:
@@ -65,8 +66,13 @@ st.button("Ask", type="primary", on_click=_submit)
 if st.session_state.run:
     st.session_state.run = False
     question = st.session_state.question.strip()
-    if question:
-        with st.spinner("Thinking... this can take up to a couple of minutes."):
+    if client.limit_reached(st.session_state.asked):
+        st.warning(client.LIMIT_MESSAGE)
+    elif question:
+        st.session_state.asked += 1
+        with st.spinner("Thinking... this can take up to a couple of minutes. "
+                        "The first question after a quiet period can take about a minute "
+                        "while the server wakes up."):
             display = client.ask(question)
         st.session_state.history.insert(0, (question, display))
         del st.session_state.history[MAX_HISTORY:]

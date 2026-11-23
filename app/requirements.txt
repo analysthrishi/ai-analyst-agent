@@ -1,0 +1,6 @@
+# Dependencies for the Streamlit UI only (Streamlit Community Cloud).
+# The API (FastAPI, DuckDB, Gemini) runs on a separate host; see the README "Deployment" section.
+# Versions match uv.lock.
+streamlit==1.66.1
+pandas==3.0.6
+requests==2.34.2

@@ -12,3 +12,5 @@ data/
 *.duckdb
 .env
 __pycache__/
+# Local screenshots (kept on disk, not published)
+ops/

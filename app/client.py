@@ -1,5 +1,6 @@
 """HTTP client for the FastAPI backend. No streamlit import, so it can be unit tested."""
 import os
+from urllib.parse import urlparse
 from dataclasses import dataclass, field, fields
 from typing import Any
 
@@ -19,6 +20,10 @@ NOTE_STATUSES = {
     "no_tool_result": "The agent replied without using a tool.",
 }
 START_API = "Start it with: uv run uvicorn --app-dir src api:app"
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+DEFAULT_QUESTION_LIMIT = 10
+LIMIT_MESSAGE = ("You have reached the question limit for this session. "
+                 "Reload the page to start a new session.")
 
 
 @dataclass
@@ -42,6 +47,23 @@ class Display:
 
 def api_url() -> str:
     return (os.getenv("API_URL") or DEFAULT_API_URL).rstrip("/")
+
+
+def is_local_api() -> bool:
+    """True when API_URL points at this machine, so a "start the server" hint makes sense."""
+    return urlparse(api_url()).hostname in LOCAL_HOSTS
+
+
+def question_limit() -> int:
+    """Questions allowed per browser session (env MAX_QUESTIONS_PER_SESSION, default 10)."""
+    try:
+        return max(1, int(os.getenv("MAX_QUESTIONS_PER_SESSION", DEFAULT_QUESTION_LIMIT)))
+    except ValueError:
+        return DEFAULT_QUESTION_LIMIT
+
+
+def limit_reached(asked: int) -> bool:
+    return asked >= question_limit()
 
 
 def build_headers() -> dict[str, str]:
@@ -145,7 +167,11 @@ def error_display(exc: Exception) -> Display:
     if isinstance(exc, requests.Timeout):
         message = f"The API took longer than {TIMEOUT_S} seconds to answer. Try a simpler question."
     elif isinstance(exc, requests.ConnectionError):
-        message = f"Can't reach the API at {api_url()}. Is it running? {START_API}"
+        if is_local_api():
+            message = f"Can't reach the API at {api_url()}. Is it running? {START_API}"
+        else:
+            message = ("Can't reach the API. It may be waking up after a quiet period or "
+                       "temporarily down. Wait a minute and try again.")
     else:
         message = "The request to the API failed."
     return _scrub(Display(ok=False, kind="error", message=message))
