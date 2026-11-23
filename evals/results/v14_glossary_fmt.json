@@ -1,0 +1,47 @@
+{
+  "version": "v14_glossary_fmt",
+  "run_at": "2026-11-23T17:46:55.645266",
+  "score": 3,
+  "total": 3,
+  "records": [
+    {
+      "id": "q30",
+      "category": "held_out_sales",
+      "question": "How many customers are there in France?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "SELECT COUNT(DISTINCT customer_id) AS customers FROM sales WHERE country = 'France' AND NOT customer_id IS NULL LIMIT 1000",
+      "error": null,
+      "latency_s": 3.55,
+      "prompt_tokens": 1167,
+      "output_tokens": 36,
+      "attempts": 1
+    },
+    {
+      "id": "q50",
+      "category": "hard_window",
+      "question": "On average, how many days pass between a customer's first and second order? Ignore time of day and only include customers with at least two orders.",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_orders AS (SELECT customer_id, invoice, CAST(MIN(invoice_date) AS DATE) AS order_date FROM sales WHERE NOT customer_id IS NULL GROUP BY customer_id, invoice), ranked_orders AS (SELECT customer_id, order_date, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date ASC, invoice ASC) AS order_seq FROM customer_orders), first_two AS (SELECT customer_id, MAX(CASE WHEN order_seq = 1 THEN order_date END) AS first_date, MAX(CASE WHEN order_seq = 2 THEN order_date END) AS second_date FROM ranked_orders WHERE order_seq <= 2 GROUP BY customer_id HAVING COUNT(*) = 2) SELECT ROUND(AVG(CAST(second_date - first_date AS DOUBLE)), 2) AS avg_days_between_first_and_second FROM first_two LIMIT 1000",
+      "error": null,
+      "latency_s": 4.55,
+      "prompt_tokens": 1190,
+      "output_tokens": 260,
+      "attempts": 1
+    },
+    {
+      "id": "q53",
+      "category": "fresh_order",
+      "question": "On average, how many days pass between a customer's second and third order?",
+      "status": "ok",
+      "passed": true,
+      "agent_sql": "WITH customer_orders AS (SELECT customer_id, invoice, MIN(invoice_date) AS order_date FROM sales WHERE NOT customer_id IS NULL GROUP BY customer_id, invoice), ranked_orders AS (SELECT customer_id, invoice, order_date, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date ASC, invoice ASC) AS order_num FROM customer_orders), second_and_third AS (SELECT r2.customer_id, r2.order_date AS second_order_date, r3.order_date AS third_order_date, DATE_DIFF('DAY', r2.order_date, r3.order_date) AS days_between FROM ranked_orders AS r2 JOIN ranked_orders AS r3 ON r2.customer_id = r3.customer_id AND r2.order_num = 2 AND r3.order_num = 3) SELECT ROUND(AVG(days_between), 2) AS avg_days_between FROM second_and_third LIMIT 1000",
+      "error": null,
+      "latency_s": 10.47,
+      "prompt_tokens": 1176,
+      "output_tokens": 284,
+      "attempts": 1
+    }
+  ]
+}

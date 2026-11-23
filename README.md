@@ -81,6 +81,7 @@ live API and is rate-limited, so use sparingly. Each run needs a new version nam
 | v11_final (a+b+c) | 53/53 | Final-prompt regression |
 | v12_validator_fix | 55/55 | First single full run of all 55 questions, after the validator fix |
 | v13_after_fix | 55/55 | Full run, 55 questions |
+| v14_glossary_fmt | 3/3 | Spot-check (q30, q50, q53) after the glossary reformat (order and quirk bullets moved into the main list; wording unchanged) and the validator scope fix. Not a full run |
 | tools_v1 / tools_v2 | 10/10, 10/10 | Tool evals (`evals/run_tool_evals.py`) |
 
 Notes:
