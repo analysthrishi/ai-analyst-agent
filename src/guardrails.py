@@ -3,6 +3,7 @@ import re
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
+from sqlglot.optimizer.scope import traverse_scope
 
 ALLOWED_TABLES = {"sales", "transactions", "cancellations"}
 MAX_ROWS = 1000
@@ -59,14 +60,25 @@ def validate_sql(sql: str) -> tuple[bool, str, str | None]:
         if name in BLOCKED_FUNCTIONS or name.startswith(BLOCKED_FUNCTION_PREFIXES):
             return False, f"Function '{name}' is not allowed.", None
 
-    cte_names = {c.alias_or_name.lower() for c in tree.find_all(exp.CTE)}
+    # A CTE name only counts where that CTE is in scope. Matching names across the
+    # whole query would let "WITH <file path> AS (...)" in a subquery whitelist a
+    # file read in the outer query.
+    visible_ctes: dict[int, set[str]] = {}
+    try:
+        for scope in traverse_scope(tree):
+            names = {n.lower() for n in scope.cte_sources}
+            for table in scope.tables:
+                visible_ctes[id(table)] = names
+    except Exception:
+        return False, "Could not analyse table references.", None
+
     for table in tree.find_all(exp.Table):
         if not isinstance(table.this, exp.Identifier):
             return False, "Table functions are not allowed.", None
         if table.db or table.catalog:
             return False, "Qualified table names are not allowed.", None
         name = table.name.lower()
-        if name not in ALLOWED_TABLES and name not in cte_names:
+        if name not in ALLOWED_TABLES and name not in visible_ctes.get(id(table), set()):
             return False, f"Table '{name}' is not allowed. Use: {sorted(ALLOWED_TABLES)}.", None
 
     if isinstance(tree, exp.Select) and not tree.args.get("limit"):

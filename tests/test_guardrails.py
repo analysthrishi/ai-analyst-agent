@@ -91,3 +91,30 @@ def test_parse_error_has_no_ansi_codes(sql):
 def test_all_gold_queries_pass_validator(q):
     ok, reason, _ = validate_sql(q["gold_sql"])
     assert ok, f"{q['id']}: {reason}"
+
+@pytest.mark.parametrize("sql", [
+    # A CTE defined in a subquery must not whitelist the same name in the outer query
+    "SELECT * FROM \"/tmp/x.csv\" WHERE EXISTS (WITH \"/tmp/x.csv\" AS (SELECT 1) SELECT 1)",
+    "SELECT * FROM secret_table WHERE EXISTS (WITH secret_table AS (SELECT 1) SELECT 1)",
+    "SELECT * FROM secret_table, (WITH secret_table AS (SELECT 1) SELECT * FROM secret_table) t",
+    # A CTE is not visible to an earlier CTE
+    "WITH a AS (SELECT * FROM b), b AS (SELECT 1) SELECT * FROM a",
+])
+def test_cte_name_does_not_whitelist_tables_outside_its_scope(sql):
+    ok, reason, safe = validate_sql(sql)
+    assert not ok, f"Should have been blocked: {sql}"
+    assert safe is None
+    assert "not allowed" in reason, reason
+
+
+@pytest.mark.parametrize("sql", [
+    "WITH a AS (SELECT * FROM sales), b AS (SELECT * FROM a) SELECT * FROM b",
+    "WITH A AS (SELECT * FROM sales) SELECT * FROM a",
+    "WITH a AS (SELECT 1 AS n) SELECT * FROM a x JOIN sales s ON s.quantity = x.n",
+    "SELECT * FROM (WITH z AS (SELECT 1 AS n) SELECT * FROM z) t",
+    "SELECT * FROM sales WHERE quantity IN (WITH z AS (SELECT 1) SELECT * FROM z)",
+    "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 5) SELECT * FROM r",
+])
+def test_cte_names_in_scope_still_allowed(sql):
+    ok, reason, safe = validate_sql(sql)
+    assert ok, reason

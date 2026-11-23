@@ -167,3 +167,34 @@ def test_request_is_logged(fake, caplog, answer_with_tools):
     assert any(m.startswith(f"request {rid} done: status=no_tool_result") for m in messages)
     assert any(f"request {rid} tool nope ok=False" in m for m in messages)
     assert sum(f"request {rid} step" in m for m in messages) == 2
+
+
+def test_execute_tool_never_raises(agent_tools, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("secret internal detail")
+    monkeypatch.setattr(agent_tools.tool_impl, "rfm_segments", boom)
+    state = {"succeeded": False, "blocked": None}
+    out = agent_tools.execute_tool("rfm_segments", {}, state)
+    assert out["ok"] is False
+    assert "RuntimeError" in out["error"]
+    assert "secret internal detail" not in out["error"]
+    assert state["succeeded"] is False
+
+
+def test_failed_rfm_does_not_count_as_success(agent_tools, monkeypatch):
+    monkeypatch.setattr(agent_tools.tool_impl, "rfm_segments",
+                        lambda: {"ok": False, "error": "RFM failed"})
+    state = {"succeeded": False, "blocked": None}
+    agent_tools.execute_tool("rfm_segments", {}, state)
+    assert state["succeeded"] is False
+
+
+def test_tool_crash_still_writes_a_trace(fake, answer_with_tools, agent_tools, monkeypatch, trace_file):
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(agent_tools.tool_impl, "make_chart", boom)
+    fake(tool_reply("make_chart"), text_reply("Sorry, the chart failed."))
+    out = answer_with_tools("chart please")
+    assert out["status"] == "no_tool_result"
+    assert out["tool_calls"][0]["ok"] is False
+    assert len(trace_file.read_text(encoding="utf-8").splitlines()) == 1

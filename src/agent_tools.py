@@ -77,6 +77,15 @@ def _jsonable(obj):
 
 
 def execute_tool(name: str, args: dict, state: dict) -> dict:
+    """Run one tool. Never raises: an unexpected error becomes an ok=False result."""
+    try:
+        return _dispatch_tool(name, args, state)
+    except Exception as e:
+        log.warning("tool %s raised %s", name, type(e).__name__)
+        return {"ok": False, "error": f"Tool failed unexpectedly: {type(e).__name__}."}
+
+
+def _dispatch_tool(name: str, args: dict, state: dict) -> dict:
     if name == "run_sql":
         ok, reason, safe_sql = validate_sql(args.get("sql", ""))
         if not ok:
@@ -105,7 +114,8 @@ def execute_tool(name: str, args: dict, state: dict) -> dict:
 
     if name == "rfm_segments":
         out = tool_impl.rfm_segments()
-        state["succeeded"] = True
+        if out.get("ok"):
+            state["succeeded"] = True
         return _jsonable(out)
 
     return {"ok": False, "error": f"Unknown tool: {name}"}
@@ -247,8 +257,6 @@ if __name__ == "__main__":
         for c in out["tool_calls"]:
             print("Tool:", c["name"], "| ok:", c["ok"])
             print("   args:", c["args"])
-            if c.get("error"):
-                print("   error:", c["error"])
         if out["sql"]:
             print("SQL:", out["sql"])
         if out["chart_path"]:

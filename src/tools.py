@@ -1,4 +1,5 @@
 import re
+import uuid
 from pathlib import Path
 
 import duckdb
@@ -7,6 +8,7 @@ import matplotlib
 matplotlib.use("Agg")  # draw to files, no window
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from guardrails import validate_sql
 
@@ -44,23 +46,32 @@ def make_chart(sql: str, kind: str, x: str, y: str, title: str) -> dict:
             return {"ok": False, "error": f"Column '{col}' not in result. Columns: {list(df.columns)}"}
 
     df = df.head(MAX_CHART_ROWS)
-    fig, ax = plt.subplots(figsize=(10, 5))
-    labels = df[x].astype(str)
-    if kind == "bar":
-        ax.bar(labels, df[y])
-    else:
-        ax.plot(labels, df[y], marker="o")
-    ax.set_title(title)
-    ax.set_xlabel(x)
-    ax.set_ylabel(y)
-    plt.xticks(rotation=45, ha="right")
-    fig.tight_layout()
+    fig = None
+    try:
+        if not pd.api.types.is_numeric_dtype(df[y]):
+            return {"ok": False, "error": f"Column '{y}' must be numeric to plot, but is {df[y].dtype}."}
+        fig, ax = plt.subplots(figsize=(10, 5))
+        labels = df[x].astype(str)
+        if kind == "bar":
+            ax.bar(labels, df[y])
+        else:
+            ax.plot(labels, df[y], marker="o")
+        ax.set_title(title)
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+        plt.xticks(rotation=45, ha="right")
+        fig.tight_layout()
 
-    CHART_DIR.mkdir(parents=True, exist_ok=True)
-    slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")[:50] or "chart"
-    path = CHART_DIR / f"{slug}.png"
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
+        CHART_DIR.mkdir(parents=True, exist_ok=True)
+        slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")[:50] or "chart"
+        # Unique suffix so two charts with the same title never overwrite each other
+        path = CHART_DIR / f"{slug}_{uuid.uuid4().hex[:8]}.png"
+        fig.savefig(path, dpi=120)
+    except Exception as e:
+        return {"ok": False, "error": f"Chart failed: {type(e).__name__}: {e}"}
+    finally:
+        if fig is not None:
+            plt.close(fig)  # always release the figure, even when plotting fails
 
     return {"ok": True, "path": str(path), "rows_plotted": len(df), "sql": safe_sql}
 
@@ -93,8 +104,13 @@ RFM_DEFINITION = (
 
 def rfm_segments() -> dict:
     """Score every identified customer on recency, frequency and monetary value."""
-    df = _run_df(RFM_SQL)
+    try:
+        return _rfm_summary(_run_df(RFM_SQL))
+    except Exception as e:
+        return {"ok": False, "error": f"RFM failed: {type(e).__name__}: {e}"}
 
+
+def _rfm_summary(df) -> dict:
     conditions = [
         (df["r"] >= 4) & (df["f"] >= 4) & (df["m"] >= 4),
         (df["f"] >= 4) & (df["r"] >= 3),

@@ -251,3 +251,48 @@ def test_agent_exception_is_500_generic(client, agent):
     assert r.status_code == 500
     assert "AIzaSECRET" not in r.text
     assert r.json()["error"] == "Internal error."
+
+
+# --- daily budget reservation (no check-then-add race) ---
+
+def test_reserve_never_grants_more_than_is_left(monkeypatch):
+    monkeypatch.setenv("MAX_DAILY_API_CALLS", "10")
+    d = api.DailyBudget()
+    grants = [d.reserve(8)[0] for _ in range(3)]
+    assert grants == [8, 2, 0]  # in-flight requests count against the limit
+
+
+def test_settle_returns_unused_calls(monkeypatch):
+    monkeypatch.setenv("MAX_DAILY_API_CALLS", "10")
+    d = api.DailyBudget()
+    granted, day = d.reserve(8)
+    d.settle(granted, day, used=3)
+    assert d.reserve(8)[0] == 7  # 10 - 3 actually used
+
+
+def test_settle_ignores_reservation_from_previous_day(monkeypatch):
+    monkeypatch.setenv("MAX_DAILY_API_CALLS", "10")
+    monkeypatch.setattr(api, "_today", lambda: date(2026, 1, 1))
+    d = api.DailyBudget()
+    granted, day = d.reserve(8)
+    monkeypatch.setattr(api, "_today", lambda: date(2026, 1, 2))
+    d.reserve(1)  # rolls to the new day: used = 1
+    d.settle(granted, day, used=3)
+    assert d.reserve(100)[0] == 9  # unchanged by the old day's settle
+
+
+def test_concurrent_requests_cannot_overshoot_daily_limit(monkeypatch):
+    import threading
+    monkeypatch.setenv("MAX_DAILY_API_CALLS", "20")
+    d = api.DailyBudget()
+    granted = []
+    barrier = threading.Barrier(10)
+
+    def worker():
+        barrier.wait()
+        granted.append(d.reserve(8)[0])
+
+    threads = [threading.Thread(target=worker) for _ in range(10)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert sum(granted) == 20

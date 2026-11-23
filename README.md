@@ -1,66 +1,105 @@
 # AI Analyst Agent
 
-An LLM agent that answers business questions about retail data by writing
-and running safe SQL, choosing tools (charts, customer segmentation), and
-explaining the results. Includes an evaluation suite and guardrails.
+An LLM agent (Gemini via `google-genai`) that answers business questions about
+retail data. It writes read-only DuckDB SQL, calls tools for charts and customer
+segmentation, and explains the results. It ships with guardrails, request
+tracing, a 55-question eval suite, an API, a UI, Docker and CI.
 
-**Status:** in progress
+**Status:** complete. The latest full run (`v13_after_fix`) scores 55/55.
 
 ## Dataset
-UCI Online Retail II (transactions from a UK online retailer, 2009-2011).
+UCI Online Retail II: transactions from a UK online retailer, 2009-2011.
 Download it from the UCI Machine Learning Repository and place the file in
 `data/raw/`. The dataset is not included in this repo.
 
+Business definitions (revenue, valid sale, order, etc.) and known cleaning
+limitations are in [`docs/glossary.md`](docs/glossary.md). The glossary is
+injected into the system prompt.
+
+## How it works
+- **SQL agent** (`src/baseagent.py`): frozen baseline. System prompt, schema and
+  `answer_question`. It is not edited, so the 55-question eval stays comparable.
+- **Tool agent** (`src/agent_tools.py`): adds three tools: `run_sql`, `make_chart`
+  and `rfm_segments` (implementations in `src/tools.py`).
+- **Guardrails** (`src/guardrails.py`): a sqlglot validator.
+- **Tracing** (`src/tracing.py`, `src/trace_report.py`): per-request traces go to
+  `outputs/traces.jsonl`. They never store result rows or tool arguments.
+- **API** (`src/api.py`): FastAPI with `/health`, `/ask` and `/charts/{name}`,
+  per-request and daily API-call budgets, and an optional `X-API-Key`.
+- **UI** (`app/streamlit_app.py`): Streamlit front end over `app/client.py`.
+
+## Safety layers
+1. The prompt tells the model to refuse destructive or unanswerable requests.
+2. The SQL validator allows only a single SELECT on approved tables. It
+   normalises invisible characters before parsing.
+3. The database connection is read-only.
+
 ## Setup
+Create a `.env` file in the repo root with `GEMINI_API_KEY` and `GEMINI_MODEL`
+(never commit it), then:
+
     uv sync
     uv run python src/clean_and_load.py
     uv run python src/verify.py
 
-## Data cleaning
-See `docs/glossary.md` for business definitions and known limitations.
+## Usage
+    uv run pytest -q                                   # tests, no API calls
+    uv run uvicorn --app-dir src api:app --reload      # API on :8000 (calls Gemini)
+    uv run streamlit run app/streamlit_app.py          # UI (start the API first)
+    docker compose up --build                          # API :8000, UI :8501
 
-## Roadmap
-- [x] Data cleaning and DuckDB load
-- [ ] Evaluation set (40-50 questions)
-- [ ] Baseline agent
-- [ ] Guardrails
-- [ ] Tools (charts, RFM)
-- [ ] API and UI
-- [ ] Docker, CI and deployment
+`API_URL` (default `http://127.0.0.1:8000`) and `API_ACCESS_KEY` can be set in
+the environment for the UI. Build the database before using Docker, since it is
+mounted read-only.
 
+## Evaluation
+Questions and gold SQL are in `evals/questions.py`. Saved runs are in
+`evals/results/`. A result counts as a match when all gold values appear in the
+agent's row, so a perfect score does not rule out failures on other question types.
 
-## Evaluation results
+Run: `uv run python evals/run_evals.py <version> [q01,q02,...]`. It calls the
+live API and is rate-limited, so use sparingly. Each run needs a new version name.
 
+### Results
 | Version | Score | What changed |
 |---|---|---|
-| baseline_v1 | 11/13 | First run (includes percent-formatting rule) |
+| baseline | 11/13 | First run. Failed q04 (month formatting) and q08 (top-10% share) |
+| baseline_v1 | 12/13 | Added percent-formatting rule. q08 still failing |
 | v2_parse_fix | 13/13 | Decline detection tolerates code fences |
 | v3_guardrails | 13/13 | Added SQL validator, tests, retry loop |
-
-Note: 13 questions is a small set. Day 5 expands it to find real weaknesses.
-
-## Safety layers
-1. Prompt tells the model to refuse destructive requests.
-2. SQL validator (sqlglot) allows only a single SELECT on approved tables.
-3. Read-only database connection.
-
-| v4_batch1 | 9/13 | New questions q15-q27. 2 failures were gold-SQL issues, 2 were agent errors |
-| v5_rules | 2/2 on previously failed | Rules: default to `sales`; count entities via a CTE |
+| v4_batch1 | 9/13 | New questions q15-q27. Two failures were gold-SQL issues (q19, q21), two were agent errors (q15, q24) |
+| v4_batch1_regold | 2/2 | Re-ran q19 and q21 after fixing their gold SQL |
+| v5_rules | 2/2 | Rules: default to `sales`; count entities via a CTE. Re-ran q15 and q24 |
 | v5_regress (a+b) | 26/26 | Full regression under the new prompt, no regressions |
-
-- Prompt rules were written after seeing failures on batch 1. Batch 2 (held-out) tests whether they generalise.
-
-| v5_regress (a+b) | 26/26 | Full regression under the new prompt |
 | v6_batch2 | 15/15 | Held-out questions written before the run; prompt frozen |
+| v7_batch3 | 5/8 | Failed q43 (LAG after filter), q48 (rank before grouping), q50 (undefined "order") |
+| v8_fixes | 3/3 | Window rule, top-N rule, glossary definition of "order" |
+| v8_regress (a+b+c) | 47/48 | Full regression. q30 was blocked by the validator (see below) |
+| v9_fresh | 3/4 | Generalisation test: window 1/1, top-N 2/2, order definition 0/1 (q53, near miss: 83.63 vs 83.66 days) |
+| v10_order | 3/3 | Rule: orders are identified by invoice, plus fresh order questions |
+| v10_regress (a+b+c) | 53/53 | Full regression under the near-final prompt |
+| v11_final (a+b+c) | 53/53 | Final-prompt regression |
+| v12_validator_fix | 55/55 | First single full run of all 55 questions, after the validator fix |
+| v13_after_fix | 55/55 | Full run, 55 questions |
+| tools_v1 / tools_v2 | 10/10, 10/10 | Tool evals (`evals/run_tool_evals.py`) |
 
-- Held-out batch is small (15 questions); a perfect score does not rule out failures on other question types.
-- Result comparison accepts a match when all gold values appear in the agent's row.
-| v8_fixes | to fill | Window rule, top-N rule, glossary definition of "order" |
+Notes:
+- Prompt rules were written after seeing failures on batch 1. Batch 2 was held
+  out to test whether they generalise (15/15). Batch 3 then exposed three new
+  failure types, which v8 and v10 addressed.
+- When a question failed, the gold SQL was checked before blaming the agent.
+  Two of the four batch 1 failures were gold errors.
 
-| v9_fresh | 3/4 | Generalisation test: window 1/1, top-N 2/2, order definition 0/1 (near miss) |
-| v10_order | to fill | Rule: orders identified by invoice, plus 2 fresh order questions |
+### Failure analysis
+A regression run caught the validator rejecting a harmless question (q30). The
+model's SQL contained an invisible zero-width space. I added a failing test,
+normalised invisible characters before parsing, and verified that obfuscated
+attacks are still blocked.
 
-| v10_order | to fill | Order-as-invoice rule + 2 fresh order questions |
-| v10_regress (a+b+c) | to fill / 53 | Full regression under the final prompt |
+More entries are in [`docs/failure_note.md`](docs/failure_note.md).
 
-A good failure-analysis entry: “A regression run caught the validator rejecting a harmless question (q30). The model’s SQL contained an invisible zero-width space. I added a failing test, normalised invisible characters before parsing, and verified that obfuscated attacks are still blocked.”
+## CI and deployment
+GitHub Actions (`.github/workflows/ci.yml`) runs `uv sync --locked` and
+`uv run pytest -q` on push and PR to `main`. It uses no secrets, no `data/` and
+makes no Gemini calls. The `Dockerfile` builds a non-root image that runs
+uvicorn on port 8000.

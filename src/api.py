@@ -61,15 +61,23 @@ class DailyBudget:
         if today != self.day:
             self.day, self.used = today, 0
 
-    def remaining(self) -> int:
-        with self.lock:
-            self._roll()
-            return _daily_limit() - self.used
+    def reserve(self, wanted: int) -> tuple[int, date | None]:
+        """Atomically set aside up to `wanted` calls; returns (granted, day).
 
-    def add(self, api_calls: int) -> None:
+        Reserving up front, rather than checking and then adding afterwards, stops
+        concurrent requests from each seeing the same remaining budget.
+        """
         with self.lock:
             self._roll()
-            self.used += api_calls
+            granted = max(0, min(wanted, _daily_limit() - self.used))
+            self.used += granted
+            return granted, self.day
+
+    def settle(self, granted: int, day: date | None, used: int) -> None:
+        """Replace a reservation with the calls actually made."""
+        with self.lock:
+            if day == self.day:  # a reservation from a previous day is not carried over
+                self.used += used - granted
 
 
 daily = DailyBudget()
@@ -139,15 +147,15 @@ def health():
 def ask(req: AskRequest, x_api_key: Annotated[str | None, Header()] = None):
     _check_key(x_api_key)
 
-    remaining = daily.remaining()
-    if remaining <= 0:
+    granted, day = daily.reserve(MAX_API_CALLS_PER_REQUEST)
+    if granted <= 0:
         limit = _daily_limit()
         raise HTTPException(
             status_code=429,
             detail=f"Daily API call budget exhausted ({limit}/{limit}). Try again tomorrow.",
         )
 
-    budget = SessionBudget(max_api_calls=min(MAX_API_CALLS_PER_REQUEST, remaining))
+    budget = SessionBudget(max_api_calls=granted)
     try:
         result = _answer(req.question, budget)
     except Exception as e:
@@ -155,7 +163,7 @@ def ask(req: AskRequest, x_api_key: Annotated[str | None, Header()] = None):
         body = AskResponse(status="error", error="Internal error.")
         return JSONResponse(status_code=500, content=body.model_dump())
     finally:
-        daily.add(budget.api_calls)
+        daily.settle(granted, day, budget.api_calls)
 
     body = _to_response(result)
     code = STATUS_CODES.get(body.status, 500)
