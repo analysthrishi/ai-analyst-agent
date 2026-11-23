@@ -23,7 +23,7 @@ injected into the system prompt.
   and `rfm_segments` (implementations in `src/tools.py`).
 - **Guardrails** (`src/guardrails.py`): a sqlglot validator.
 - **Tracing** (`src/tracing.py`, `src/trace_report.py`): per-request traces go to
-  `outputs/traces.jsonl`. They never store result rows or tool arguments.
+  `outputs/traces.jsonl`. They never store result rows or raw tool-call arguments; the validated SQL is kept for debugging.
 - **API** (`src/api.py`): FastAPI with `/health`, `/ask` and `/charts/{name}`,
   per-request and daily API-call budgets, and an optional `X-API-Key`.
 - **UI** (`app/streamlit_app.py`): Streamlit front end over `app/client.py`.

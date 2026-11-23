@@ -46,7 +46,7 @@ RFM tools, guardrails, tracing, and an eval suite.
 - Open the database with `read_only=True` everywhere except `clean_and_load.py`.
 - Keep all three layers: prompt refusal, validate_sql, read-only connection.
   Add a test in `tests/test_guardrails.py` for any validator change.
-- Traces never store result rows or tool arguments. `log_trace` must never crash the agent.
+- Traces never store result rows or raw tool-call arguments. The one exception is the validated SQL (`sql`), kept for debugging. `log_trace` must never crash the agent.
 - The model name and API key come from `.env` (GEMINI_MODEL, GEMINI_API_KEY). Never hardcode them.
 
 ## Evals
