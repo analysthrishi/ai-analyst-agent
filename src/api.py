@@ -3,6 +3,7 @@ import os
 import re
 import secrets
 import threading
+import traceback
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Any
@@ -30,8 +31,28 @@ STATUS_CODES = {
     "api_error": 502, "empty_reply": 502, "max_steps": 502,
 }
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
 app = FastAPI(title="AI Analyst Agent")
+
+
+_GEMINI_KEY = re.compile(r"AIza[0-9A-Za-z_-]{20,}")
+
+
+def _describe_error(e: BaseException) -> str:
+    """Safe one-line description for server logs: type, redacted message, where it was raised.
+
+    Only ever logged, never returned to the client. Secrets are masked first.
+    """
+    message = str(e)
+    for name in ("GEMINI_API_KEY", "API_ACCESS_KEY"):
+        value = os.getenv(name)
+        if value:
+            message = message.replace(value, "***")
+    message = _GEMINI_KEY.sub("***", message)[:300]
+    frames = traceback.extract_tb(e.__traceback__)
+    where = f"{Path(frames[-1].filename).name}:{frames[-1].lineno} in {frames[-1].name}" if frames else "?"
+    return f"{type(e).__name__}: {message} (at {where})"
 
 
 def _answer(question: str, budget: SessionBudget) -> dict:
@@ -159,7 +180,7 @@ def ask(req: AskRequest, x_api_key: Annotated[str | None, Header()] = None):
     try:
         result = _answer(req.question, budget)
     except Exception as e:
-        log.error("agent raised %s", type(e).__name__)
+        log.error("agent raised %s", _describe_error(e))
         body = AskResponse(status="error", error="Internal error.")
         return JSONResponse(status_code=500, content=body.model_dump())
     finally:

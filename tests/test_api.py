@@ -296,3 +296,31 @@ def test_concurrent_requests_cannot_overshoot_daily_limit(monkeypatch):
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert sum(granted) == 20
+
+
+# --- server logs say what failed, without leaking secrets ---
+
+def test_agent_exception_is_logged_with_type_and_location(client, agent, caplog):
+    agent.raises = KeyError("GEMINI_MODEL")
+    with caplog.at_level("ERROR"):
+        ask(client)
+    line = " ".join(r.getMessage() for r in caplog.records)
+    assert "agent raised KeyError" in line
+    assert "GEMINI_MODEL" in line  # enough to diagnose a missing variable
+    assert "test_api.py" in line   # where it was raised
+
+
+def test_logged_error_masks_secrets(client, agent, caplog, monkeypatch):
+    monkeypatch.setenv("API_ACCESS_KEY", "s3cret-access-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "gem-key-value-123")
+    agent.raises = RuntimeError(
+        "bad s3cret-access-key and gem-key-value-123 and AIzaSyA1234567890123456789012345678901"
+    )
+    with caplog.at_level("ERROR"):
+        r = ask(client, headers={"X-API-Key": "s3cret-access-key"})
+    logged = " ".join(rec.getMessage() for rec in caplog.records)
+    assert r.status_code == 500
+    for secret in ("s3cret-access-key", "gem-key-value-123", "AIzaSyA1234567890123456789012345678901"):
+        assert secret not in logged
+        assert secret not in r.text
+    assert "***" in logged

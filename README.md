@@ -102,7 +102,7 @@ More entries are in [`docs/failure_note.md`](docs/failure_note.md).
 ## Deployment
 The app is two services. Streamlit Community Cloud runs Python scripts from a GitHub
 repo and does not use Dockerfiles, so the Docker image is for the API host only.
-
+  
 | Part | Where | Files |
 |---|---|---|
 | API (FastAPI + DuckDB + Gemini) | Render (Docker web service, builds from GitHub) | `Dockerfile.render` |
